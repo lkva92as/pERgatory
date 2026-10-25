@@ -255,7 +255,7 @@
       case 'slide': s.slide = Math.min(1, e.c / 40); if (s.slide >= 1) next(); break;
       case 'blink': if (e.c === 1) s.blink = 24; if (e.c >= 24) next(); break;
       case 'shake': if (e.c === 1) s.shake = 16; if (e.c >= 16) next(); break;
-      case 'flash': G.invert = (e.c >> 2) % 2 === 0; if (e.c >= 28) { G.invert = false; next(); } break;
+      case 'flash': G.invert = !G.reducedMotion && (e.c >> 2) % 2 === 0; if (e.c >= 28) { G.invert = false; next(); } break;
       case 'faint': s.faint = Math.min(48, e.c * 2); if (s.faint >= 48) next(); break;
       case 'bar': {
         const key = e.w + 'Shown';
@@ -273,7 +273,7 @@
   B.draw = () => {
     const ctx = G.ctx, p = s.p, g = s.g;
     ctx.save();
-    if (s.shake) ctx.translate((s.shake >> 1) % 2 ? 2 : -2, 0);
+    if (s.shake && !G.reducedMotion) ctx.translate((s.shake >> 1) % 2 ? 2 : -2, 0);
     G.clear(0);
 
     const ex = Math.round(-48 + 152 * s.slide), mx = Math.round(160 - 152 * s.slide);

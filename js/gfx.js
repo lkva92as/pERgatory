@@ -23,6 +23,7 @@
   try { palIdx = (+localStorage.getItem('perg.pal') || 0) % G.palettes.length; } catch (e) {}
   G.shift = 0;      // -3..3: negative fades toward white, positive toward black
   G.invert = false; // flash effect
+  G.reducedMotion = matchMedia('(prefers-reduced-motion: reduce)').matches; // skips flashes and shakes
 
   G.setPalette = (i) => {
     palIdx = (i + G.palettes.length) % G.palettes.length;

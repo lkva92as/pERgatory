@@ -4,12 +4,18 @@
   const pick = (a) => a[Math.floor(Math.random() * a.length)];
   const fmt = (n) => n.toLocaleString('en-US');
 
-  // ---------- screen sizing (integer scale when there's room) ----------
+  // ---------- screen sizing: fill what the console shell leaves free (integer scale when there's room) ----------
   function fit() {
-    const avail = Math.min((innerWidth - 90) / 160, (innerHeight - 330) / 144);
+    const c = G.canvas, shell = c.closest('.shell'), help = document.querySelector('.help');
+    const root = getComputedStyle(document.documentElement), body = getComputedStyle(document.body);
+    const pad = (st, a, b) => parseFloat(st[a]) + parseFloat(st[b]);
+    const freeW = innerWidth - pad(body, 'paddingLeft', 'paddingRight') - (shell.offsetWidth - c.offsetWidth);
+    const freeH = innerHeight - pad(root, 'paddingTop', 'paddingBottom') - pad(body, 'paddingTop', 'paddingBottom')
+      - (shell.offsetHeight - c.offsetHeight) - (help.offsetParent ? help.offsetHeight + 14 : 0);
+    const avail = Math.min(freeW / 160, freeH / 144);
     const s = avail >= 2 ? Math.floor(avail) : Math.max(1, avail);
-    G.canvas.style.width = 160 * s + 'px';
-    G.canvas.style.height = 144 * s + 'px';
+    c.style.width = 160 * s + 'px';
+    c.style.height = 144 * s + 'px';
   }
   addEventListener('resize', fit);
   fit();
@@ -26,7 +32,12 @@
     Enter: 'start', Shift: 'select',
   };
   const press = (b, on) => {
-    if (on) { SFX.unlock(); audioOk = true; if (!I.down[b]) I.hit[b] = true; }
+    if (on) {
+      SFX.unlock();
+      if (!audioOk && state === 'world') SFX.music('world'); // resumed from a snapshot before any input
+      audioOk = true;
+      if (!I.down[b]) I.hit[b] = true;
+    }
     I.down[b] = on;
   };
   addEventListener('keydown', (e) => {
@@ -203,7 +214,7 @@
   }
   function updTrans() {
     trans.t++;
-    G.invert = trans.t < 24 && (trans.t >> 2) % 2 === 0;
+    G.invert = !G.reducedMotion && trans.t < 24 && (trans.t >> 2) % 2 === 0;
     if (trans.t < 60) return;
     G.invert = false;
     const tr = trans;
@@ -406,7 +417,29 @@
     draw();
     requestAnimationFrame(loop);
   }
-  requestAnimationFrame(loop);
+
+  // ---------- hot reload (artifact viewer): keep the run going across republishes ----------
+  function snapshot() {
+    if (!P || !['world', 'trans', 'battle'].includes(state)) return {};
+    const d = {};
+    for (const k of Object.keys(g)) if (typeof g[k] !== 'function') d[k] = g[k];
+    d.bays = g.bays.map((p) => p && p.id);
+    return { g: d, P: { x: P.x, y: P.y, dir: P.dir } };
+  }
+  function restore(d) {
+    if (!d || !d.g || !d.P) return;
+    reset();
+    Object.assign(g, d.g, {
+      items: Object.assign({}, d.g.items),
+      bays: d.g.bays.map((id) => PATIENTS.find((p) => p.id === id) || null),
+    });
+    Object.assign(P, d.P, { px: d.P.x * TS, py: d.P.y * TS, moving: false });
+    state = 'world';
+  }
+  const boot = (d) => { restore(d); requestAnimationFrame(loop); };
+  const hot = window.claude && window.claude.hot;
+  if (hot && hot.snapshot) hot.snapshot(snapshot);
+  if (hot && hot.ready) hot.ready(boot); else boot((hot && hot.data) || {});
 
   // Console hooks for testing: DEBUG.press('a'); DEBUG.run(60);
   window.DEBUG = {
