@@ -66,6 +66,7 @@
       items: Object.assign({}, START_ITEMS), night: 1, min: 0, seen: 0,
       coffeeReady: true, napReady: true, vendIn: 0, bays: [null, null, null, null, null, null], bayTimer: 0,
       waiting: [], deck: null, met: {}, // waiting room queue; case deck; visits per regular this shift
+      bayClean: [0, 0, 0, 0, 0, 0], // steps until a just-cleared bay can take a new patient
       floor: 'er', orFix: {}, pitched: 0, // which floor; OR patients you've rescued; night you last turned down Dr. Ether
       heal(k, n) { const b = this[k]; this[k] = Math.min(this[k + 'Max'], this[k] + n); return this[k] - b; },
       gainXp(n) {
@@ -115,9 +116,9 @@
     if (stander) stander.seat = p.seat;
     return p;
   }
-  // Rooms the longest-waiting patient into an empty bay; returns the bay number, or 0.
+  // Rooms the longest-waiting patient into an empty, clean bay; returns the bay number, or 0.
   function roomNext() {
-    const i = g.bays.findIndex((b) => !b);
+    const i = g.bays.findIndex((b, k) => !b && !g.bayClean[k]);
     if (i < 0 || !g.waiting.length) return 0;
     g.bays[i] = leaveWaiting(g.waiting[0]);
     return i + 1;
@@ -184,6 +185,13 @@
   function onStep() {
     g.min += 0.5;
     stepsSince++;
+    // A bay that finishes being cleaned gets the next patient right away.
+    let freed = false;
+    g.bayClean.forEach((c, i) => { if (c > 0 && --g.bayClean[i] === 0) freed = true; });
+    if (freed) {
+      const n = roomNext();
+      if (n) { SFX.play('page'); return say(`OVERHEAD: "BAY ${n} IS CLEAN. NEW PATIENT IN BAY ${n}."`); }
+    }
     if (++g.bayTimer >= 40) {
       g.bayTimer = 0;
       arrive(1);
@@ -225,6 +233,7 @@
         (yes) => yes && ride(up ? 'or' : 'er'));
     }
     const bi = WORLD.BAYS.findIndex((b) => b.x === fx && b.y === fy);
+    if (bi >= 0 && !g.bays[bi] && g.bayClean[bi]) return say(`MORT IS MOPPING BAY ${bi + 1}. IT WON'T STAY EMPTY FOR LONG.`);
     if (bi >= 0 && g.bays[bi]) return encounter(g.bays[bi], `YOU PULL BACK THE CURTAIN ON BAY ${WORLD.BAYS[bi].n}.`, { bay: bi });
     const si = WORLD.seatAt(fx, fy), sitter = si >= 0 && g.waiting.find((w) => w.seat === si);
     if (sitter) return encounter(sitter, 'YOU MAKE EYE CONTACT WITH SOMEONE IN THE WAITING ROOM. ROOKIE MISTAKE.', { wait: sitter });
@@ -305,7 +314,7 @@
   }
   function battleOver(r, from) {
     if (r === 'lose') return fadeOut(() => { state = 'gameover'; over = { t: 0 }; });
-    if (from.bay >= 0) g.bays[from.bay] = null;
+    if (from.bay >= 0) { g.bays[from.bay] = null; g.bayClean[from.bay] = 30; }
     if (from.wait) leaveWaiting(from.wait);
     if (r === 'win') {
       g.seen++; g.coffeeReady = true; g.napReady = true; g.orFix = {}; g.vendIn = Math.max(0, g.vendIn - 1); g.min += 35;
@@ -419,7 +428,7 @@
     const cy = Math.max(-9, Math.min(WORLD.h * TS - 144, P.py - 64));
     G.clear(3);
     WORLD.draw(cx, cy);
-    WORLD.drawBays(g.bays, cx, cy);
+    WORLD.drawBays(g.bays, cx, cy, g.bayClean);
     WORLD.drawWaiting(g.waiting, cx, cy);
     WORLD.drawNPCs(cx, cy);
     drawPlayer(cx, cy);

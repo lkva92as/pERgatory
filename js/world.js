@@ -339,8 +339,9 @@
       if (s) G.draw(SPR.ow(p.look), s.x * TS - camX, s.y * TS - camY - 4, (s.x + s.y) % 2 === 1);
     }
   };
-  W.drawBays = (bays, camX, camY) => {
+  W.drawBays = (bays, camX, camY, clean) => {
     W.BAYS.forEach((b, i) => {
+      if (!bays[i] && clean[i]) G.draw(SPR.wetSign, b.x * TS - camX, b.y * TS - camY); // being mopped
       if (bays[i]) G.draw(SPR.ow(bays[i].look),b.x * TS - camX, b.y * TS - camY - 3 + ((G.frame >> 5) % 2));
     });
   };
