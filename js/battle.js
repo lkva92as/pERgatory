@@ -36,7 +36,6 @@
   const B = window.BATTLE = {};
   let s = null;
   const rnd = (a, b) => a + Math.floor(Math.random() * (b - a + 1));
-  const pick = (a) => a[Math.floor(Math.random() * a.length)];
   const STAT = { san: 'SANITY', rsp: 'SELF-RESPECT' };
   const SHORT = { diagnose: 'DIAGNOSE', reassure: 'REASSURE', pamphlet: 'PAMPHLET', hellfire: 'HELLFIRE',
     sandwich: 'SANDWICH', icechips: 'ICE CHIPS', worknote: 'WORK NOTE', blanket: 'BLANKET' };
@@ -48,29 +47,34 @@
   const lost = () => s.g.san <= 0 || s.g.rsp <= 0;
   const itemList = () => Object.keys(ITEMS).filter((k) => s.g.items[k] > 0);
 
-  B.start = (p, g, intro, onEnd) => {
+  // `where` is an optional line setting the scene (which bay, etc.) before the patient's own intro.
+  B.start = (p, g, where, onEnd) => {
     const hp = Math.round(p.hp * (1 + 0.15 * (g.night - 1) + 0.04 * (g.lv - 1)));
+    const visit = g.met[p.id] = (g.met[p.id] || 0) + 1;
     s = {
       p, g, onEnd, hp, hpMax: hp, hpShown: hp, dmgScale: 1 + 0.12 * (g.night - 1),
       sanShown: g.san, rspShown: g.rsp, q: [], ev: null, tb: null, mode: 'busy',
-      menu: 0, mv: 0, it: 0, calm: false, last: -1, charted: false,
+      menu: 0, mv: 0, it: 0, calm: false, line: 0, loud: 0, charted: false,
       blink: 0, shake: 0, faint: 0, slide: 0,
     };
     SFX.music('battle');
     push({ k: 'slide' });
-    say(intro);
+    if (where) say(where);
+    say(visit > 1 ? p.back.replace('{N}', visit) : p.intro);
     say(`${p.name}!\nCHIEF COMPLAINT: ${p.cc}`);
     push({ k: 'menu' });
   };
 
   // ---------- turn logic (state changes now, display catches up via events) ----------
-  function hitPatient(base, id) {
-    const mult = s.p.weak === id ? (s.p.weakMult || 2) : 1;
-    s.hp = Math.max(0, s.hp - Math.round(base * mult));
+  // Weakness hits get the patient's own reaction; other hits show `reaction` if given.
+  function hitPatient(base, id, reaction) {
+    const weak = s.p.weak === id;
+    s.hp = Math.max(0, s.hp - Math.round(base * (weak ? (s.p.weakMult || 2) : 1)));
     sfx('hit');
     push({ k: 'blink' });
     push({ k: 'bar', w: 'hp', to: s.hp });
-    if (mult > 1) say("IT'S SUPER EFFECTIVE!");
+    if (weak) { say(s.p.weakHit); say("IT'S SUPER EFFECTIVE!"); }
+    else if (reaction) say(reaction);
   }
 
   function hurtMe(stat, n) {
@@ -80,16 +84,19 @@
     push({ k: 'bar', w: stat, to: s.g[stat] });
   }
 
+  // Patients work through their script in order; at the end they start over, louder.
   function enemyTurn() {
     const p = s.p;
-    let i;
-    do { i = Math.floor(Math.random() * p.attacks.length); } while (i === s.last && p.attacks.length > 1);
-    s.last = i;
-    const a = p.attacks[i];
-    let n = a.d * s.dmgScale * (0.85 + Math.random() * 0.3);
+    let a = p.script[s.line++];
+    if (!a) {
+      s.line = 0;
+      s.loud++;
+      a = { t: null, s: 'san', d: 6 };
+    }
+    let n = (a.d + 2 * s.loud) * s.dmgScale * (0.9 + Math.random() * 0.2);
     if (s.calm) n *= 0.5;
     s.calm = false;
-    say(`${p.short}: "${a.t}"`);
+    say(a.t ? `${p.short}: "${a.t}"` : `${p.short} TAKES A DEEP BREATH AND STARTS AGAIN FROM THE TOP. LOUDER.`);
     hurtMe(a.s, Math.max(1, Math.round(n)));
     if (a.g && s.hp < s.hpMax && !lost()) {
       s.hp = Math.min(s.hpMax, s.hp + a.g);
@@ -111,6 +118,7 @@
   }
 
   function loseSeq() {
+    say(`${s.p.short}: ${s.p.last}`);
     say(s.g.san <= 0 ? 'YOUR SANITY HAS LEFT THE BUILDING.' : 'YOU HAVE NO SELF-RESPECT LEFT. NOT EVEN A LITTLE.');
     push({ k: 'fn', f: () => { SFX.music(null); SFX.play('gameover'); } });
     say('DR. MALPHAS BLACKED OUT!');
@@ -136,24 +144,24 @@
     }
     const base = rnd(m.min, m.max);
     if (m.id === 'diagnose') {
-      say(`DR. MALPHAS DIAGNOSES:\n"${pick(FLAVOR.diagnoses)}"`);
+      say(`DR. MALPHAS DIAGNOSES:\n"${p.dx}"`);
       hitPatient(base, m.id);
     } else if (m.id === 'reassure') {
-      say(pick(FLAVOR.reassure));
+      say(p.reassure);
       hitPatient(base, m.id);
       s.calm = true;
     } else if (m.id === 'pamphlet') {
-      say(`YOU HAND ${p.short} A PAMPHLET:\n"${pick(FLAVOR.pamphlets)}"`);
-      if (p.resist === 'pamphlet' || Math.random() < m.backfire) {
+      say(`YOU HAND ${p.short} A PAMPHLET:\n"${p.pamphlet}"`);
+      if (p.weak !== 'pamphlet' && (p.resist === 'pamphlet' || Math.random() < m.backfire)) {
         sfx('miss');
-        say(pick(FLAVOR.backfire));
+        say(p.backfire);
         hurtMe('san', rnd(4, 7));
       } else hitPatient(base, m.id);
     } else if (m.id === 'hellfire') {
       say('YOUR EYES BLAZE WITH THE FIRES OF THE PIT!');
       sfx('fire');
       push({ k: 'flash' });
-      hitPatient(base, m.id);
+      hitPatient(base, m.id, p.hellfire);
       g.rsp -= m.cost;
       push({ k: 'bar', w: 'rsp', to: g.rsp });
       say(`HR HAS BEEN NOTIFIED.\n-${m.cost} SELF-RESPECT.`);
@@ -177,7 +185,7 @@
       say(parts.join(', ') + '.');
     } else {
       say(`YOU OFFER ${s.p.short}: ${it.name}.`);
-      hitPatient(it.dmg, id);
+      hitPatient(it.dmg, id, it.use.replace('{P}', s.p.short));
     }
     endOrMenu(true);
   }
@@ -268,6 +276,8 @@
       case 'end': next(); s.onEnd(e.r); break;
     }
   };
+
+  B.mode = () => s && s.mode; // for console testing
 
   // ---------- draw ----------
   B.draw = () => {

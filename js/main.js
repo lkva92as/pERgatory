@@ -65,6 +65,7 @@
       san: 40, sanMax: 40, rsp: 30, rspMax: 30, lv: 1, xp: 0, next: 30,
       items: Object.assign({}, START_ITEMS), night: 1, min: 0, seen: 0,
       coffeeReady: true, napReady: true, vendIn: 0, bays: [null, null, null, null, null, null], bayTimer: 0,
+      met: {}, lastId: null, // visits per patient this shift; who you saw last
       heal(k, n) { const b = this[k]; this[k] = Math.min(this[k + 'Max'], this[k] + n); return this[k] - b; },
       gainXp(n) {
         const msgs = [];
@@ -101,9 +102,10 @@
     const empty = g.bays.map((b, i) => (b ? -1 : i)).filter((i) => i >= 0);
     if (!empty.length) return -1;
     const i = pick(empty);
-    g.bays[i] = pickPatient();
+    g.bays[i] = pickPatient(inBays().concat(g.lastId));
     return i;
   }
+  const inBays = () => g.bays.filter(Boolean).map((p) => p.id);
 
   function fadeOut(cb) { fade = { t: 0, cb }; }
   function stepFade() {
@@ -155,14 +157,14 @@
       if (i >= 0) { SFX.play('page'); return say(`OVERHEAD: "NEW PATIENT IN BAY ${WORLD.BAYS[i].n}."`); }
     }
     if (g.min >= 720) return nightEnd();
+    // Waiting room: someone not yet roomed corners you. Hallway: a bay patient comes looking for you.
     const zone = WORLD.encounterZone(P.x, P.y);
-    if (zone && stepsSince > 6 && Math.random() < 1 / 14) {
-      const p = pickPatient();
-      const intro = zone === 'waiting' ? 'A PATIENT FROM THE WAITING ROOM CORNERS YOU!'
-        : `A PATIENT WANDERS OUT OF BAY ${1 + Math.floor(Math.random() * 6)}!`;
-      SFX.play('page');
-      say(pick(FLAVOR.pages), () => encounter(p, intro, -1));
-    }
+    if (!zone || stepsSince <= 6 || Math.random() >= 1 / 14) return;
+    if (zone === 'waiting') return encounter(pickPatient(inBays().concat(g.lastId)), null, -1);
+    const full = g.bays.map((b, i) => (b ? i : -1)).filter((i) => i >= 0);
+    if (!full.length) return;
+    const i = pick(full);
+    encounter(g.bays[i], `THE PATIENT FROM BAY ${WORLD.BAYS[i].n} HAS FOLLOWED YOU INTO THE HALL.`, i);
   }
 
   function nightEnd() {
@@ -180,7 +182,7 @@
     if (!npc && WORLD.isCounter(ch)) npc = WORLD.npcAt(fx + dx, fy + dy);
     if (npc) return say(`${npc.name}:\n${npc.lines[npc.i++ % npc.lines.length]}`);
     const bi = WORLD.BAYS.findIndex((b) => b.x === fx && b.y === fy);
-    if (bi >= 0 && g.bays[bi]) return encounter(g.bays[bi], `BAY ${WORLD.BAYS[bi].n}: "FINALLY! A DOCTOR!"`, bi);
+    if (bi >= 0 && g.bays[bi]) return encounter(g.bays[bi], `YOU PULL BACK THE CURTAIN ON BAY ${WORLD.BAYS[bi].n}.`, bi);
     const lines = WORLD.interact(ch, g);
     if (!lines) return;
     if (/^\+/.test(lines[lines.length - 1])) SFX.play('heal');
@@ -207,6 +209,7 @@
 
   // ---------- encounters ----------
   function encounter(p, intro, bay) {
+    g.lastId = p.id;
     SFX.music(null);
     SFX.play('encounter');
     state = 'trans';
@@ -444,7 +447,7 @@
   // Console hooks for testing: DEBUG.press('a'); DEBUG.run(60);
   window.DEBUG = {
     get g() { return g; }, get state() { return state; }, get P() { return P; }, get dlg() { return dlg; },
-    encounter: (i) => { dlg = null; encounter(PATIENTS[i || 0], 'DEBUG PATIENT!', -1); },
+    encounter: (i) => { dlg = null; encounter(PATIENTS[i || 0], null, -1); },
     press: (b) => { I.hit[b] = true; },
     hold: (b, on) => { I.down[b] = on; },
     run: (n = 1) => { for (let i = 0; i < n; i++) tick(); draw(); },
