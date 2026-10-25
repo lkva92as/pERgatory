@@ -424,7 +424,8 @@
     WORLD.drawNPCs(cx, cy);
     drawPlayer(cx, cy);
     G.rect(0, 0, 160, 9, 3);
-    G.text(`${g.clockStr()} N${g.night}`, 2, 1, 0);
+    const lie = G.weird > 0.5 && Math.sin(G.frame / 41) > 0.96; // the clock briefly says something it shouldn't
+    G.text(`${lie ? '3:33 AM' : g.clockStr()} N${g.night}`, 2, 1, 0);
     const st = `SAN ${g.san} RSP ${g.rsp}`;
     G.text(st, 158 - G.textW(st), 1, g.san < 10 || g.rsp < 8 ? 1 : 0);
     if (menu) drawMenu();
@@ -492,6 +493,11 @@
   // ---------- main loop ----------
   function tick() {
     G.frame++;
+    // Reality starts to slip below 65% sanity and is fully gone around 10%.
+    const lost = P && ['world', 'trans', 'battle'].includes(state) ? 1 - g.san / g.sanMax : 0;
+    G.weird = Math.max(0, Math.min(1, (lost - 0.35) / 0.55));
+    G.tickWeird();
+    SFX.setWeird(G.weird);
     if (fade) stepFade();
     else if (state === 'title') updTitle();
     else if (state === 'world') updWorld();
@@ -505,6 +511,7 @@
     else if (state === 'world' || state === 'trans') drawWorld();
     else if (state === 'battle') BATTLE.draw();
     else if (state === 'gameover') drawOver();
+    G.post();
   }
 
   let last = performance.now(), acc = 0;

@@ -1,7 +1,9 @@
 // Chiptune SFX and looping music via WebAudio.
 (function () {
   const A = window.SFX = {};
-  let ac = null, master = null, pulse = null, muted = false;
+  let ac = null, master = null, filter = null, pulse = null, muted = false;
+  let weird = 0, tape = 0; // sanity distortion (0..1); notes left in a tape-stop sag
+  const pick = (a) => a[Math.floor(Math.random() * a.length)];
   try { muted = localStorage.getItem('perg.mute') === '1'; } catch (e) {}
   const VOL = 0.16;
 
@@ -12,7 +14,12 @@
       ac = new C();
       master = ac.createGain();
       master.gain.value = muted ? 0 : VOL;
-      master.connect(ac.destination);
+      filter = ac.createBiquadFilter(); // closes down as sanity drains, so everything sounds underwater
+      filter.type = 'lowpass';
+      filter.frequency.value = 18000;
+      filter.Q.value = 4;
+      master.connect(filter);
+      filter.connect(ac.destination);
       // 25% duty pulse wave, the classic handheld lead tone
       const n = 32, re = new Float32Array(n), im = new Float32Array(n), d = 0.25;
       for (let k = 1; k < n; k++) {
@@ -40,6 +47,7 @@
     if (type === 'pulse') o.setPeriodicWave(pulse); else o.type = type;
     o.frequency.setValueAtTime(f, t0);
     if (slideTo) o.frequency.exponentialRampToValueAtTime(slideTo, t0 + dur);
+    if (weird > 0.1) o.detune.setValueAtTime(Math.sin(t0 * 0.7) * weird * 60 + (Math.random() - 0.5) * weird * 40, t0);
     g.gain.setValueAtTime(vol, t0);
     g.gain.exponentialRampToValueAtTime(0.001, t0 + dur);
     o.connect(g); g.connect(master);
@@ -105,17 +113,32 @@
   };
   let cur = null, step = 0, nextT = 0, timer = null;
 
+  // As sanity drains (weird -> 1) the music drifts out of tune, sways in tempo, hits wrong notes,
+  // drops out, stutters, sags like a stopping tape, and sinks underwater.
   function schedule() {
     if (!cur || !ac) return;
-    const tr = TRACKS[cur], dt = 60 / tr.bpm / 2;
-    while (nextT < ac.currentTime + 0.25) {
-      const i = step % tr.lead.length;
-      if (tr.lead[i]) tone(freq(tr.lead[i]), nextT, dt * 0.85, 'pulse', 0.16);
-      const b = tr.bass[i % tr.bass.length];
-      if (b) tone(freq(b), nextT, dt * 1.8, 'triangle', 0.4);
-      nextT += dt; step++;
+    const tr = TRACKS[cur], k = weird, now = ac.currentTime;
+    const cutoff = k < 0.3 ? 18000 : 600 + 17000 * Math.pow(1 - (k - 0.3) / 0.7, 2) + Math.sin(now * 0.8) * 300 * k;
+    filter.frequency.setTargetAtTime(cutoff, now, 0.2);
+    while (nextT < now + 0.25) {
+      const dt = 60 / tr.bpm / 2 * (1 + (k > 0.3 ? Math.sin(nextT * 0.5) * 0.3 * k : 0));
+      const i = step % tr.lead.length, b = tr.bass[i % tr.bass.length];
+      let m = tr.lead[i];
+      if (k > 0.2 && m) {
+        const r = Math.random();
+        if (r < k * 0.12) m += pick([1, -1, 6, 12, -12]);
+        else if (r < k * 0.2) m = 0;
+      }
+      const sag = tape > 0 ? Math.pow(2, -(8 - tape) / 12) : 1;
+      if (m) tone(freq(m) * sag, nextT, dt * 0.85, k > 0.6 && Math.random() < k - 0.5 ? 'sawtooth' : 'pulse', 0.16);
+      if (b) tone(freq(b) * sag, nextT, dt * 1.8, 'triangle', 0.4);
+      if (k > 0.5 && Math.random() < k * 0.03) noise(nextT, 0.2, 0.08);
+      if (tape > 0) tape--; else if (k > 0.7 && Math.random() < 0.01) tape = 8;
+      nextT += dt;
+      if (!(k > 0.3 && Math.random() < k * 0.08)) step++;
     }
   }
+  A.setWeird = (k) => { weird = k; };
 
   A.music = (name) => {
     if (name === cur) return;

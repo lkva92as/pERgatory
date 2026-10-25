@@ -291,6 +291,7 @@
     if (!(s.blink && (s.blink >> 2) % 2)) {
       ctx.save();
       ctx.beginPath(); ctx.rect(ex, 0, 48, 46); ctx.clip();
+      if (G.weird > 0.45 && !G.reducedMotion) G.draw(p.sprite, ex + Math.round(Math.sin(G.frame / 9) * G.weird * 6), s.faint); // double vision
       G.draw(p.sprite, ex, s.faint);
       ctx.restore();
     }

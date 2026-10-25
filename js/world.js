@@ -174,6 +174,7 @@
       "DON'T GET ATTACHED TO AN EMPTY BAY. THEY ALL COME BACK. FRANK ESPECIALLY.",
       'IF YOUR SANITY OR SELF-RESPECT HITS ZERO, THE SHIFT STARTS OVER. ASK ME HOW I KNOW.',
       'THE BREAK ROOM COFFEE REFILLS AFTER EVERY PATIENT. IT IS THE ONLY THING HERE THAT DOES.',
+      'IF THE WALLS START BREATHING, THAT IS YOUR SANITY TALKING. DRINK SOME COFFEE.',
       'THE BAYS FILL UP ON THEIR OWN. NOBODY KNOWS HOW. NOBODY ASKS.',
     ] },
     { x: 9, y: 7, spr: 'nurse', name: 'TRIAGE NURSE GLADYS', lines: [
@@ -328,7 +329,8 @@
   W.drawNPCs = (camX, camY) => {
     for (const n of W.NPCS) {
       const bob = n.spr === 'ghost' ? Math.round(Math.sin(G.frame / 20 + n.x)) : 0;
-      G.draw(SPR[n.spr], n.x * TS - camX, n.y * TS - camY - 2 + bob);
+      const seen = G.weird > 0.6 && ((G.frame >> 5) + n.x * 3) % 13 === 0 ? 'skeleton' : n.spr; // hallucinations
+      G.draw(SPR[seen], n.x * TS - camX, n.y * TS - camY - 2 + bob);
     }
   };
   W.drawWaiting = (waiting, camX, camY) => {

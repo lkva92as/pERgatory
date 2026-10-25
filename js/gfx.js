@@ -25,6 +25,10 @@
   G.invert = false; // flash effect
   G.reducedMotion = matchMedia('(prefers-reduced-motion: reduce)').matches; // skips flashes and shakes
 
+  // Sanity distortion: 0 = sane, 1 = gone. main.js sets G.weird each tick; tickWeird() runs the palette glitches.
+  G.weird = 0;
+  let perm = [0, 1, 2, 3], flashPal = -1, flashT = 0, driftPal = -1;
+
   G.setPalette = (i) => {
     palIdx = (i + G.palettes.length) % G.palettes.length;
     try { localStorage.setItem('perg.pal', palIdx); } catch (e) {}
@@ -33,10 +37,24 @@
   G.palName = () => G.palettes[palIdx].name;
   const mapIdx = (i) => {
     if (G.invert) i = 3 - i;
-    return Math.max(0, Math.min(3, i + G.shift));
+    return perm[Math.max(0, Math.min(3, i + G.shift))];
   };
-  G.color = (i) => G.palettes[palIdx].c[mapIdx(i)];
-  const cacheKey = () => palIdx + ':' + G.shift + ':' + (G.invert ? 1 : 0);
+  const curPal = () => (flashPal >= 0 ? flashPal : driftPal >= 0 ? driftPal : palIdx);
+  G.color = (i) => G.palettes[curPal()].c[mapIdx(i)];
+  const cacheKey = () => curPal() + ':' + G.shift + ':' + (G.invert ? 1 : 0) + ':' + perm.join('');
+
+  G.tickWeird = () => {
+    const k = G.weird, n = G.palettes.length;
+    driftPal = k > 0.7 ? (palIdx + 1 + Math.floor(G.frame / 240)) % n : -1; // the screen slowly cycles colors
+    if (flashT > 0) {
+      if (--flashT === 0) { perm = [0, 1, 2, 3]; flashPal = -1; }
+      return;
+    }
+    if (G.reducedMotion || k < 0.15 || Math.random() > k * k * 0.03) return;
+    flashT = 4 + Math.floor(Math.random() * 16 * k); // a brief wrong-color moment
+    if (Math.random() < 0.5) flashPal = (palIdx + 1 + Math.floor(Math.random() * (n - 1))) % n;
+    else perm = [0, 1, 2, 3].sort(() => Math.random() - 0.5);
+  };
 
   const rgbCache = {};
   function rgb(hex) {
@@ -184,7 +202,8 @@
     let cx = Math.round(x), cy = Math.round(y);
     for (const raw of String(str).toUpperCase()) {
       if (raw === '\n') { cx = Math.round(x); cy += G.LH * scale; continue; }
-      const gi = glyphIdx[raw] !== undefined ? glyphIdx[raw] : glyphIdx['?'];
+      let gi = glyphIdx[raw] !== undefined ? glyphIdx[raw] : glyphIdx['?'];
+      if (G.weird > 0.4 && !G.reducedMotion && raw !== ' ' && Math.random() < (G.weird - 0.4) * 0.04) gi = Math.floor(Math.random() * glyphs.length);
       if (raw !== ' ') ctx.drawImage(a, gi * 6, 0, 5, 7, cx, cy, 5 * scale, 7 * scale);
       cx += G.CW * scale;
     }
@@ -217,6 +236,36 @@
     G.rect(x + 1, y + 1, w - 2, h - 2, 0);
     G.rect(x + 2, y + 2, w - 4, h - 4, 2);
     G.rect(x + 3, y + 3, w - 6, h - 6, 0);
+  };
+
+  // Screen distortion applied after each frame is drawn: rows that sway, tracking tears,
+  // misplaced blocks, static. Motion effects are skipped for viewers who prefer reduced motion.
+  const buf = document.createElement('canvas');
+  buf.width = G.W; buf.height = G.H;
+  const bctx = buf.getContext('2d');
+  G.post = () => {
+    const k = G.weird;
+    if (k <= 0 || G.reducedMotion) return;
+    const t = G.frame, rnd = (n) => Math.floor(Math.random() * n);
+    if (k > 0.25) {
+      bctx.drawImage(canvas, 0, 0);
+      const amp = (k - 0.25) * 4;
+      for (let y = 0; y < G.H; y++) {
+        const dx = Math.round(Math.sin(y / 9 + t / 12) * amp);
+        if (dx) ctx.drawImage(buf, 0, y, G.W, 1, dx, y, G.W, 1);
+      }
+    }
+    if (Math.random() < k * 0.1) {
+      const y = rnd(G.H - 12), h = 2 + rnd(10), dx = (rnd(2) ? 1 : -1) * (2 + rnd(Math.ceil(10 * k)));
+      ctx.drawImage(canvas, 0, y, G.W, h, dx, y, G.W, h);
+    }
+    if (Math.random() < k * k * 0.12) {
+      for (let i = 0; i < 1 + rnd(3); i++) {
+        const w = 8 * (1 + rnd(3)), h = 8 * (1 + rnd(2));
+        ctx.drawImage(canvas, rnd(G.W - w), rnd(G.H - h), w, h, rnd(G.W - w), rnd(G.H - h), w, h);
+      }
+    }
+    if (k > 0.5) for (let i = 0; i < Math.floor((k - 0.5) * 60); i++) G.rect(rnd(G.W), rnd(G.H), 1, 1, rnd(2) ? 0 : 3);
   };
 
   // Stat bar: outlined, fill flashes when low.
