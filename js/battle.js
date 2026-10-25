@@ -299,8 +299,8 @@
 
     if (s.slide >= 1) {
       G.text(p.name, 4, 4);
-      G.text('DMD', 4, 14);
-      G.bar(24, 15, 60, s.hpShown / s.hpMax);
+      G.text('WANTS', 4, 14);
+      G.bar(36, 15, 50, s.hpShown / s.hpMax);
       G.rect(2, 22, 86, 1, 3);
       G.rect(88, 12, 1, 11, 3);
       if (s.charted) G.text('WEAK:' + short(p.weak), 4, 27, 2);
