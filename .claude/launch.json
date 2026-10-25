@@ -1,0 +1,11 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "pergatory",
+      "runtimeExecutable": "python",
+      "runtimeArgs": ["serve.py", "8418"],
+      "port": 8418
+    }
+  ]
+}
