@@ -7,35 +7,42 @@
   const rnd = (a, b) => a + Math.floor(Math.random() * (b - a + 1));
 
   const NAMES = {
-    A: ['ANDY', 'AMY', 'ABE', 'ALMA', 'ARLO'], B: ['BOB', 'BEA', 'BUD', 'BRAD', 'BETH'],
-    C: ['CARL', 'CODY', 'CHAZ', 'CLEO', 'CORA'], D: ['DAVE', 'DEB', 'DOUG', 'DANA', 'DALE'],
-    E: ['ED', 'EVE', 'ELLA', 'EARL', 'ENZO'], F: ['FRAN', 'FLO', 'FINN', 'FAYE', 'FRED'],
-    G: ['GUS', 'GIL', 'GLEN', 'GINA', 'GWEN'], H: ['HAL', 'HANK', 'HOPE', 'HUGO', 'HEIDI'],
-    I: ['IVY', 'IKE', 'IDA', 'IAN', 'IRMA'], J: ['JEN', 'JOE', 'JUNE', 'JAKE', 'JODI'],
-    K: ['KEN', 'KIM', 'KYLE', 'KAT', 'KURT'], L: ['LOU', 'LEN', 'LIZ', 'LANA', 'LYLE'],
-    M: ['MEG', 'MAX', 'MO', 'MIMI', 'MILO'], N: ['NED', 'NAN', 'NOAH', 'NORA', 'NICK'],
-    O: ['OTIS', 'OLGA', 'OZ', 'OLLIE', 'ODIN'], P: ['PAM', 'PETE', 'PAT', 'PIA', 'PHIL'],
-    Q: ['QUINN'], R: ['RAY', 'RITA', 'ROB', 'RUTH', 'RHYS'], S: ['SUE', 'SID', 'STU', 'SKIP', 'SASHA'],
-    T: ['TIM', 'TINA', 'TOM', 'TESS', 'TROY'], U: ['UMA', 'URSA'], V: ['VIC', 'VAL', 'VERN', 'VERA'],
-    W: ['WES', 'WALT', 'WANDA', 'WIN'], X: ['XAVI'], Y: ['YURI', 'YVES'], Z: ['ZOE', 'ZEKE', 'ZED'],
+    A: ['ANDY', 'AMY', 'ABE', 'ALMA', 'ARLO', 'ANDRE', 'ANA'], B: ['BOB', 'BEA', 'BUD', 'BRAD', 'BETH'],
+    C: ['CARL', 'CODY', 'CHAZ', 'CLEO', 'CORA', 'CHEN'], D: ['DAVE', 'DEB', 'DOUG', 'DANA', 'DALE', 'DEJA', 'DION'],
+    E: ['ED', 'EVE', 'ELLA', 'EARL', 'ENZO', 'ESSIE'], F: ['FRAN', 'FLO', 'FINN', 'FAYE', 'FRED', 'FARAH'],
+    G: ['GUS', 'GIL', 'GLEN', 'GINA', 'GWEN'], H: ['HAL', 'HANK', 'HOPE', 'HUGO', 'HEIDI', 'HIRO'],
+    I: ['IVY', 'IKE', 'IDA', 'IAN', 'IRMA', 'IMANI'], J: ['JEN', 'JOE', 'JUNE', 'JAKE', 'JODI', 'JADA', 'JAMAL'],
+    K: ['KEN', 'KIM', 'KYLE', 'KAT', 'KURT', 'KIARA', 'KENJI'], L: ['LOU', 'LEN', 'LIZ', 'LANA', 'LYLE', 'LUIS', 'LUPE'],
+    M: ['MEG', 'MAX', 'MO', 'MIMI', 'MILO', 'MAE', 'MALIK', 'MEI'], N: ['NED', 'NAN', 'NOAH', 'NORA', 'NICK', 'NIA'],
+    O: ['OTIS', 'OLGA', 'OZ', 'OLLIE', 'ODIN', 'OMAR'], P: ['PAM', 'PETE', 'PAT', 'PIA', 'PHIL', 'PRIYA'],
+    Q: ['QUINN'], R: ['RAY', 'RITA', 'ROB', 'RUTH', 'RHYS', 'RAJ'], S: ['SUE', 'SID', 'STU', 'SKIP', 'SASHA', 'SHAY', 'SANTI'],
+    T: ['TIM', 'TINA', 'TOM', 'TESS', 'TROY', 'TIANA', 'TREY'], U: ['UMA', 'URSA'], V: ['VIC', 'VAL', 'VERN', 'VERA'],
+    W: ['WES', 'WALT', 'WANDA', 'WIN', 'WEI'], X: ['XAVI'], Y: ['YURI', 'YVES', 'YUSUF'], Z: ['ZOE', 'ZEKE', 'ZED'],
   };
+  const FEM = new Set(('AMY ALMA ANA BEA BETH CLEO CORA DEB DANA DEJA EVE ELLA ESSIE FRAN FLO FAYE FARAH GINA GWEN HOPE ' +
+    'HEIDI IVY IDA IRMA IMANI JEN JUNE JODI JADA KIM KAT KIARA LIZ LANA LUPE MEG MIMI MAE MEI NAN NORA NIA OLGA PAM PIA ' +
+    'PRIYA RITA RUTH SUE SASHA SHAY TINA TESS TIANA UMA URSA VAL VERA WANDA ZOE').split(' '));
   const ALL_NAMES = [].concat(...Object.values(NAMES));
   const NAME_MAX = 14; // fits the battle HUD
 
-  // Alliterative where it fits: "AIRPOD ANDY".
-  function firstName(nick) {
+  // Alliterative where it fits: "AIRPOD ANDY". `fem` limits the pick to women's names.
+  function firstName(nick, fem) {
     const room = NAME_MAX - nick.length - 1;
-    const fit = (list) => list.filter((n) => n.length <= room);
-    return pick(fit(NAMES[nick[0]] || []).length ? fit(NAMES[nick[0]]) : fit(ALL_NAMES).length ? fit(ALL_NAMES) : ['AL']);
+    const fit = (list) => list.filter((n) => n.length <= room && (!fem || FEM.has(n)));
+    const own = fit(NAMES[nick[0]] || []), any = fit(ALL_NAMES);
+    return pick(own.length ? own : any.length ? any : ['AL']);
   }
 
   function rollLook(over) {
-    return Object.assign({
+    const L = {
+      skin: pick([1, 1, 'mid', 'mid', 2, 2]),
       hair: pick(['short', 'short', 'long', 'long', 'spiky', 'bun', 'cap', 'mohawk', 'bald']),
       hairC: pick([1, 2, 3, 3]),
       eyes: pick(['dot', 'dot', 'tired', 'tired', 'worried', 'angry', 'glasses', 'shades']),
       mouth: pick(['open', 'open', 'frown', 'smile', 'flat', 'wavy']),
-    }, over || {});
+    };
+    if (L.skin !== 1 && L.hairC === 2) L.hairC = 3; // mid-gray hair disappears into darker skin
+    return Object.assign(L, over || {});
   }
 
   // Generic reactions for walk-in cases that don't write their own.
@@ -69,6 +76,7 @@
       id: `${t.id}:${spec.first}:${spec.age}`, tid: t.id, spec,
       name: `${t.nick} ${spec.first}`, short: spec.first, hp: t.hp || 24, w: 1,
       chart: `${spec.age} Y/O. ${p.chart}`,
+      look: spec.look,
       sprite: SPR.makePatient(spec.look),
     });
   };
@@ -77,7 +85,11 @@
     const t = C.cases()[tid];
     if (t.regular) return { tid };
     const [a, b] = t.age || [19, 72];
-    return { tid, first: firstName(t.nick), age: rnd(a, b), look: rollLook(t.look) };
+    const look = rollLook(t.look);
+    // Some walk-ins come straight from bed: Black women in silk bonnets (unless the case sets the hair or headwear).
+    const bonnet = !(t.look && (t.look.hair || t.look.extra)) && Math.random() < 0.18;
+    if (bonnet) Object.assign(look, { hair: 'bonnet', skin: pick([2, 2, 'mid']), bonnetC: pick([0, 1]) });
+    return { tid, first: firstName(t.nick, bonnet), age: rnd(a, b), look };
   };
 
   function shuffle(a) {

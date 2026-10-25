@@ -334,12 +334,12 @@
   W.drawWaiting = (waiting, camX, camY) => {
     for (const p of waiting) {
       const s = W.SEATS[p.seat];
-      if (s) G.draw(SPR.patient, s.x * TS - camX, s.y * TS - camY - 4, (s.x + s.y) % 2 === 1);
+      if (s) G.draw(SPR.ow(p.look), s.x * TS - camX, s.y * TS - camY - 4, (s.x + s.y) % 2 === 1);
     }
   };
   W.drawBays = (bays, camX, camY) => {
     W.BAYS.forEach((b, i) => {
-      if (bays[i]) G.draw(SPR.patient, b.x * TS - camX, b.y * TS - camY - 3 + ((G.frame >> 5) % 2));
+      if (bays[i]) G.draw(SPR.ow(bays[i].look),b.x * TS - camX, b.y * TS - camY - 3 + ((G.frame >> 5) % 2));
     });
   };
 })();

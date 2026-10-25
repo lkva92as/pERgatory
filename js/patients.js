@@ -55,9 +55,9 @@ window.PATIENTS = [
     win: 'STEVE WAS DISCHARGED WITH ONE TISSUE AND A NEW SENSE OF PURPOSE.' },
 
   { id: 'iris', name: 'INTERNET IRIS', short: 'IRIS', cc: 'SELF-DIAGNOSED: LUPUS', hp: 26, weak: 'hellfire', resist: 'pamphlet', w: 3,
-    look: { hair: 'long', eyes: 'glasses', mouth: 'open', prop: 'phone' },
-    chart: '34 Y/O F. 47 BROWSER TABS OPEN. ACTUAL PROBLEM: PAPER CUT. TRUSTS NO PAPER. FEARS ONLY WHAT SHE CANNOT GOOGLE.',
-    intro: 'A WOMAN HOLDS UP HER PHONE. ON SCREEN: 47 OPEN TABS. "I\'VE DONE MY RESEARCH."',
+    look: { hair: 'bonnet', skin: 2, eyes: 'glasses', mouth: 'open', prop: 'phone' },
+    chart: '34 Y/O F. CAME STRAIGHT FROM BED. 47 BROWSER TABS OPEN. ACTUAL PROBLEM: PAPER CUT. TRUSTS NO PAPER. FEARS ONLY WHAT SHE CANNOT GOOGLE.',
+    intro: 'A WOMAN IN A SILK BONNET HOLDS UP HER PHONE. ON SCREEN: 47 OPEN TABS. "I\'VE DONE MY RESEARCH."',
     back: 'IRIS IS BACK. SHE FOUND A NEW WEBSITE.',
     script: [
       { t: 'I LOOKED UP MY SYMPTOMS ON THE WAY HERE.', s: 'san', d: 5 },
@@ -76,7 +76,7 @@ window.PATIENTS = [
     win: 'IRIS LEAVES TO WRITE A 3,000-WORD FORUM POST ABOUT YOU.' },
 
   { id: 'wendy', name: 'WORK NOTE WENDY', short: 'WENDY', cc: 'NEEDS NOTE FOR LAST TUESDAY', hp: 24, weak: 'worknote', w: 3,
-    look: { hair: 'bun', eyes: 'dot', mouth: 'smile', prop: 'note' },
+    look: { hair: 'bun', eyes: 'dot', mouth: 'smile', prop: 'note', skin: 'mid' },
     chart: '26 Y/O F. NO COMPLAINTS. HAS A SHIFT AT 9 AM. DOES NOT WANT IT. WILL LEAVE THE MOMENT SHE HAS A WORK NOTE.',
     intro: 'A YOUNG WOMAN WAVES A BLANK PIECE OF PAPER AT YOU. SHE LOOKS EXTREMELY HEALTHY.',
     back: 'WENDY IS BACK. SHE NEEDS A NOTE FOR THE TIME SHE SPENT HERE.',
@@ -98,7 +98,7 @@ window.PATIENTS = [
     win: 'WENDY SKIPS OUT, CLUTCHING HER NOTE LIKE A DIPLOMA.' },
 
   { id: 'frank', name: 'FREQUENT FRANK', short: 'FRANK', cc: '"THE USUAL"', hp: 30, weak: 'sandwich', noRun: true, w: 3,
-    look: { hair: 'bald', eyes: 'tired', mouth: 'smile', extra: 'beard', hairC: 2, prop: 'bag' },
+    look: { hair: 'bald', eyes: 'tired', mouth: 'smile', extra: 'beard', hairC: 1, prop: 'bag', skin: 2 },
     chart: 'AGE UNKNOWN. 2,413 PRIOR VISITS. HAS HIS OWN PARKING SPOT AND A MUG. ONLY A TURKEY SANDWICH WILL MAKE HIM LEAVE.',
     intro: '"HEY DOC!" A MAN WAVES FROM HIS USUAL CHAIR. HE HAS HIS OWN MUG. IT SAYS "FRANK."',
     back: "FRANK IS BACK. THAT'S {N} VISITS TONIGHT. HE WAVES LIKE IT'S BEEN YEARS.",
@@ -142,7 +142,7 @@ window.PATIENTS = [
     win: 'OPAL LEAVES A TRAIL OF LAVENDER AND UNSOLICITED ADVICE.' },
 
   { id: 'gary', name: 'SANDWICH GARY', short: 'GARY', cc: 'HUNGER', hp: 24, weak: 'sandwich', weakMult: 3, w: 3,
-    look: { hair: 'cap', eyes: 'dot', mouth: 'open' },
+    look: { hair: 'cap', eyes: 'dot', mouth: 'open', skin: 'mid' },
     chart: "29 Y/O M. CHIEF COMPLAINT, VERBATIM: 'HUNGER.' VITALS: HUNGRY. TREATMENT: SANDWICH.",
     intro: 'A MAN IN A BASEBALL CAP IS STARING AT THE VENDING MACHINE. HE TURNS TO YOU. HUNGRILY.',
     back: 'GARY IS BACK. HE IS HUNGRY AGAIN. HE IS ALWAYS HUNGRY AGAIN.',
@@ -186,7 +186,7 @@ window.PATIENTS = [
     win: 'TED HOBBLES OUT ON THE WRONG LEG. HE HAS LEFT CRUMBS EVERYWHERE.' },
 
   { id: 'sal', name: 'SKEPTICAL SAL', short: 'SAL', cc: 'WANTS A "REAL" DOCTOR', hp: 28, weak: 'hellfire', w: 3,
-    look: { hair: 'short', hairC: 1, eyes: 'angry', mouth: 'frown', prop: 'cane' },
+    look: { hair: 'short', hairC: 1, eyes: 'angry', mouth: 'frown', prop: 'cane', skin: 2 },
     chart: "78 Y/O M. HAS ASKED FOR 'A REAL DOCTOR' 14 TIMES. RESPECTS ONLY RAW POWER.",
     intro: 'AN OLD MAN BANGS HIS CANE ON THE COUNTER. "I WANT A REAL DOCTOR."',
     back: "SAL IS BACK. HE HAS BROUGHT HIS NEPHEW'S PHONE NUMBER.",
@@ -229,7 +229,7 @@ window.PATIENTS = [
     win: 'ROZ LEAVES. YOU WILL READ HER REVIEW AT 4 AM. IT WILL HURT.' },
 
   { id: 'sam', name: 'SPLINTER SAM', short: 'SAM', cc: 'SPLINTER (VIA AMBULANCE)', hp: 22, weak: 'diagnose', w: 3,
-    look: { hair: 'mohawk', eyes: 'worried', mouth: 'wavy', extra: 'bandage' },
+    look: { hair: 'mohawk', eyes: 'worried', mouth: 'wavy', extra: 'bandage', skin: 'mid' },
     chart: '22 Y/O M. SPLINTER: 2 MM. AMBULANCE BILL: $3,400. NEEDS SOMEONE TO JUST TELL HIM WHAT IT IS.',
     intro: 'A PARAMEDIC WHEELS IN A YOUNG MAN HOLDING UP ONE FINGER. "IT\'S BAD, DOC."',
     back: 'SAM IS BACK. BY AMBULANCE. HE GOT ANOTHER SPLINTER FROM THE DOOR ON THE WAY OUT.',
