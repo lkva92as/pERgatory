@@ -68,6 +68,7 @@
       waiting: [], deck: null, met: {}, // waiting room queue; case deck; visits per regular this shift
       bayClean: [0, 0, 0, 0, 0, 0], // steps until a just-cleared bay can take a new patient
       floor: 'er', orFix: {}, pitched: 0, // which floor; OR patients you've rescued; night you last turned down Dr. Ether
+      morgueRest: false, stares: 0, // lay on the morgue's empty table since the last patient; bodies stared at
       heal(k, n) { const b = this[k]; this[k] = Math.min(this[k + 'Max'], this[k] + n); return this[k] - b; },
       gainXp(n) {
         const msgs = [];
@@ -140,19 +141,22 @@
     lines = [].concat(lines);
     dlg = { tb: TB.make(lines.shift()), lines, cb };
   }
-  // A yes/no question; cb(true) for YES. B answers NO.
-  function ask(q, cb) {
-    dlg = { tb: TB.make(q), lines: [], choice: { i: 0, cb } };
+  // A question with options; cb(index). B picks the last option (the "no" / "stay" one).
+  function choose(q, opts, cb) {
+    dlg = { tb: TB.make(q), lines: [], choice: { i: 0, opts, cb } };
   }
+  const ask = (q, cb) => choose(q, ['YES', 'NO'], (i) => cb(i === 0));
   function updDialog() {
     const c = dlg.choice;
     if (c && TB.done(dlg.tb)) {
-      if (I.pressed('up') || I.pressed('down')) { c.i = 1 - c.i; SFX.play('blip'); }
+      const n = c.opts.length;
+      if (I.pressed('up')) { c.i = (c.i + n - 1) % n; SFX.play('blip'); }
+      if (I.pressed('down')) { c.i = (c.i + 1) % n; SFX.play('blip'); }
       if (I.pressed('a') || I.pressed('b')) {
-        const yes = I.pressed('a') && c.i === 0;
+        const i = I.pressed('a') ? c.i : n - 1;
         dlg = null;
-        SFX.play(yes ? 'select' : 'back');
-        c.cb(yes);
+        SFX.play(i === n - 1 ? 'back' : 'select');
+        c.cb(i);
       }
       return;
     }
@@ -228,9 +232,9 @@
     if (npc && npc.pitch) return pitch(npc);
     if (npc) return say(`${npc.name}:\n${npc.lines[npc.i++ % npc.lines.length]}`);
     if (ch === 'L') {
-      const up = WORLD.id === 'er';
-      return ask(up ? 'THE ELEVATOR. A HANDWRITTEN SIGN SAYS "SURGERY." GO UP?' : 'TAKE THE ELEVATOR BACK DOWN TO THE ER?',
-        (yes) => yes && ride(up ? 'or' : 'er'));
+      const floors = [['or', 'SURGERY 2F'], ['er', 'ER 1F'], ['mo', 'MORGUE B1']].filter(([id]) => id !== WORLD.id);
+      return choose('THE ELEVATOR. SOMEONE HAS WRITTEN "WHY BOTHER" NEXT TO THE BUTTONS.',
+        floors.map((f) => f[1]).concat('STAY'), (i) => { if (i < floors.length) ride(floors[i][0]); });
     }
     const bi = WORLD.BAYS.findIndex((b) => b.x === fx && b.y === fy);
     if (bi >= 0 && !g.bays[bi] && g.bayClean[bi]) return say(`MORT IS MOPPING BAY ${bi + 1}. IT WON'T STAY EMPTY FOR LONG.`);
@@ -252,11 +256,14 @@
       stepsSince = 0;
       SFX.music(WORLD.MUSIC);
       SFX.play('ding');
-      say(to === 'or'
-        ? ['DING. SURGICAL FLOOR.', 'IT IS VERY QUIET UP HERE. EXCEPT FOR THE ALARMS. NOBODY SEEMS TO HEAR THE ALARMS.']
-        : 'DING. EMERGENCY DEPARTMENT. THE NOISE HITS YOU LIKE A WALL.');
+      say(ARRIVALS[to]);
     });
   }
+  const ARRIVALS = {
+    er: 'DING. EMERGENCY DEPARTMENT. THE NOISE HITS YOU LIKE A WALL.',
+    or: ['DING. SURGICAL FLOOR.', 'IT IS VERY QUIET UP HERE. EXCEPT FOR THE ALARMS. NOBODY SEEMS TO HEAR THE ALARMS.'],
+    mo: ['DING. BASEMENT. MORGUE.', 'IT IS COLD AND COMPLETELY SILENT. NOBODY DOWN HERE WANTS ANYTHING FROM YOU.'],
+  };
 
   // Dr. Ether's residency pitch. Turning it down is good for you, once a night.
   function pitch(npc) {
@@ -317,7 +324,7 @@
     if (from.bay >= 0) { g.bays[from.bay] = null; g.bayClean[from.bay] = 30; }
     if (from.wait) leaveWaiting(from.wait);
     if (r === 'win') {
-      g.seen++; g.coffeeReady = true; g.napReady = true; g.orFix = {}; g.vendIn = Math.max(0, g.vendIn - 1); g.min += 35;
+      g.seen++; g.coffeeReady = true; g.napReady = true; g.orFix = {}; g.morgueRest = false; g.vendIn = Math.max(0, g.vendIn - 1); g.min += 35;
     } else g.min += 15;
     // The doors never stop: every patient out means at least one more in, more as the nights go on.
     const n = 1 + (Math.random() < 0.25 + 0.1 * g.night ? 1 : 0);
@@ -440,10 +447,10 @@
     if (menu) drawMenu();
     if (dlg) TB.draw(dlg.tb);
     if (dlg && dlg.choice && TB.done(dlg.tb)) {
-      G.box(112, 66, 48, 32);
-      G.text('YES', 128, 74);
-      G.text('NO', 128, 84);
-      G.text('▶', 119, 74 + dlg.choice.i * 10);
+      const o = dlg.choice.opts, w = 6 * Math.max(...o.map((s) => s.length)) + 22, h = o.length * 10 + 12;
+      G.box(160 - w, 96 - h, w, h);
+      o.forEach((s, i) => G.text(s, 160 - w + 15, 96 - h + 7 + i * 10));
+      G.text('▶', 160 - w + 7, 96 - h + 7 + dlg.choice.i * 10);
     }
     if (trans && trans.t >= 24) {
       const w = Math.round(160 * Math.min(1, (trans.t - 24) / 32));

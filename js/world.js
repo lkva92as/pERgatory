@@ -35,7 +35,20 @@
     '#____________________#',
     '######################',
   ];
-  [ER, OR].forEach((m) => m.forEach((r, i) => { if (r.length !== m[0].length) console.warn('map row', i, 'len', r.length); }));
+  // Morgue (basement): a wall of drawers, rows of sheeted tables, one empty one.
+  const MORGUE = [
+    '##################',
+    '#YYYYYYYL#YYYYYY##',
+    '#~~~~~~~~~~~~~~~~#',
+    '#~~Z~~Z~~~~Z~~e~~#',
+    '#~~z~~z~~~~z~~f~~#',
+    '#~~~~~~~~~~~~~~~~#',
+    '#~~Z~~Z~~~~Z~~Z~~#',
+    '#~~z~~z~~~~z~~z~~#',
+    '#~~~~~~~~~~~~~~~~#',
+    '##################',
+  ];
+  [ER, OR, MORGUE].forEach((m) => m.forEach((r, i) => { if (r.length !== m[0].length) console.warn('map row', i, 'len', r.length); }));
 
   W.START = { x: 16, y: 7, dir: 'down' };
   const ER_BAYS = [
@@ -44,9 +57,9 @@
   ];
 
   W.tile = (x, y) => (x < 0 || y < 0 || x >= W.w || y >= W.h) ? '#' : W.MAP[y][x];
-  const WALLISH = '#wCBEL';
+  const WALLISH = '#wCBELY';
   const isWall = (ch) => WALLISH.includes(ch);
-  W.solid = (x, y) => !',.:;_'.includes(W.tile(x, y));
+  W.solid = (x, y) => !',.:;_~'.includes(W.tile(x, y));
   W.isCounter = (ch) => ch === 'T' || ch === 'N' || ch === 'X';
   // Random encounters happen on public floors, never in the break room.
   W.encounterZone = (x, y) => {
@@ -140,11 +153,30 @@
     p.ellipse(5.5, 12, 2, 2.5, 1).ellipse(10.5, 12, 2, 2.5, 1);
   });
 
+  // Morgue
+  t.drawers = T(null, (p) => {
+    p.fill(3);
+    for (const y of [1, 8]) p.rect(1, y, 14, 6, 2).rect(2, y + 1, 12, 4, 1).rect(6, y + 2, 4, 1, 3).rect(3, y + 1, 2, 1, 0);
+  });
+  t.morgueFloor = T(null, (p) => { p.fill(1).line(0, 15, 15, 15, 2).line(15, 0, 15, 15, 2).set(5, 6, 2).set(11, 10, 2); });
+  t.steelHead = T(t.morgueFloor, (p) => { p.rect(1, 1, 14, 15, 3).rect(2, 2, 12, 14, 2).line(3, 3, 12, 3, 1).rect(5, 4, 6, 3, 1); });
+  t.steelFoot = T(t.morgueFloor, (p) => { p.rect(1, 0, 14, 15, 3).rect(2, 0, 12, 14, 2).line(3, 12, 12, 12, 1).rect(7, 7, 2, 1, 3); });
+  t.bodyHead = T(t.steelHead, (p) => {
+    p.ellipse(8, 7, 4.5, 4, 1).ellipse(8, 7, 3.5, 3, 0);   // head under the sheet
+    p.rect(2, 10, 12, 6, 0).line(4, 11, 4, 15, 1).line(11, 11, 11, 15, 1);
+  });
+  t.bodyFoot = T(t.steelFoot, (p) => {
+    p.rect(2, 0, 12, 9, 0).line(4, 0, 4, 7, 1).line(11, 0, 11, 7, 1);
+    p.ellipse(5.5, 9, 2.5, 2.5, 1).ellipse(10.5, 9, 2.5, 2.5, 1).ellipse(5.5, 9, 1.5, 1.5, 0).ellipse(10.5, 9, 1.5, 1.5, 0);
+    p.line(11, 11, 12, 13, 3).rect(11, 13, 4, 3, 0).set(13, 14, 3);  // toe tag
+  });
+
   const CH = {
     '.': 'floor', ',': 'carpet', ':': 'brk', c: 'chair', T: 'triage', N: 'counter', X: 'computer',
     b: 'bed', u: 'curtain', D: 'door', P: 'plant', K: 'coffee', V: 'vend', S: 'couch', R: 'rack',
     w: 'window', C: 'clock', B: 'board', E: 'exit', L: 'elevator',
     ';': 'orFloor', _: 'floor', O: 'tableHead', Q: 'tableFoot',
+    '~': 'morgueFloor', Y: 'drawers', Z: 'bodyHead', z: 'bodyFoot', e: 'steelHead', f: 'steelFoot',
   };
 
   function tileSprite(x, y) {
@@ -169,6 +201,7 @@
     { x: 16, y: 3, spr: 'nurse', name: 'NURSE BEV', lines: [
       "IF SOMEONE ASKS FOR A SANDWICH, IT'S GARY. IT'S ALWAYS GARY.",
       "THE ELEVATOR GOES UP TO SURGERY. DON'T GO UP THERE. THEY'LL TRY TO RECRUIT YOU.",
+      "THE MORGUE IN THE BASEMENT IS THE QUIETEST PLACE IN THE BUILDING. I GO DOWN THERE TO CRY. THERE'S A FREE TABLE.",
       "I'VE WORKED NIGHTS FOR 300 YEARS. YOU GET USED TO IT.\n(YOU DO NOT GET USED TO IT.)",
       'TIP: CHART A PATIENT TO FIND THEIR WEAKNESS. EVERYONE HAS ONE. MINE IS NIGHTS.',
       "DON'T GET ATTACHED TO AN EMPTY BAY. THEY ALL COME BACK. FRANK ESPECIALLY.",
@@ -230,6 +263,17 @@
     ] },
   ];
 
+  // Downstairs, nobody wants anything.
+  const MORGUE_NPCS = [
+    { x: 9, y: 5, spr: 'patho', name: 'DR. STILL (PATHOLOGY)', lines: [
+      'MY PATIENTS NEVER COMPLAIN. NOT ONCE. FORTY YEARS. BEST JOB IN THE BUILDING.',
+      "WANT TO TRANSFER DOWN HERE? SORRY. WE ONLY TAKE THE ACTUALLY DEAD. YOU'RE STUCK BEING THE OTHER THING.",
+      'I PUT ON SOFT JAZZ FOR THEM. THEY HAVE NEVER ONCE ASKED ME TO CHANGE IT.',
+      "THEY'RE THE LUCKY ONES, DOC. THEY CLOCKED OUT.",
+      "TAKE AS LONG AS YOU NEED. NOBODY'S PAGING YOU DOWN HERE. ...WELL, THEY ARE. YOU JUST CAN'T HEAR IT.",
+    ] },
+  ];
+
   // The skeleton keeps its own chair; every other waiting-room chair is a seat.
   const seatsOf = (rows, npcs) => {
     const s = [];
@@ -239,6 +283,7 @@
   const MAPS = {
     er: { rows: ER, npcs: ER_NPCS, bays: ER_BAYS, arrive: { x: 16, y: 2, dir: 'down' }, music: 'world' },
     or: { rows: OR, npcs: OR_NPCS, bays: [], arrive: { x: 1, y: 7, dir: 'down' }, music: 'title' },
+    mo: { rows: MORGUE, npcs: MORGUE_NPCS, bays: [], arrive: { x: 8, y: 2, dir: 'down' }, music: null }, // silence
   };
   Object.values(MAPS).forEach((m) => { m.seats = seatsOf(m.rows, m.npcs); m.npcs.forEach((n) => { n.i = 0; n.dir = 'down'; }); });
   W.ER_SEATS = MAPS.er.seats; // the waiting room is downstairs whichever floor you're on
@@ -251,6 +296,17 @@
   W.use('er');
   W.npcAt = (x, y) => W.NPCS.find((n) => n.x === x && n.y === y) || null;
   W.seatAt = (x, y) => W.SEATS.findIndex((s) => s.x === x && s.y === y);
+
+  // What you think about while staring at the bodies, in order.
+  const STARES = [
+    'YOU STARE AT THE SHAPE UNDER THE SHEET. IT LOOKS SO RESTFUL. NO PAGER. NO CHARTS. NO 3 AM.',
+    'THE TOE TAG SAYS "CHECKED OUT." YOU HAVE NEVER ENVIED TWO WORDS SO MUCH.',
+    'YOU WHISPER, "HOW DID YOU DO IT?" THE BODY DOES NOT ANSWER. IT NEVER HAS TO ANSWER ANYONE AGAIN.',
+    'THIS ONE IS SMILING A LITTLE UNDER THE SHEET. YOU HAVE NOT SMILED SINCE THE 1400S.',
+    'YOU TRY TO REMEMBER WHAT YOU DID TO END UP HERE. IT WAS PROBABLY PAPERWORK. IT IS ALWAYS PAPERWORK.',
+    'SOMEWHERE ABOVE YOU, A PAGER IS GOING OFF. IT IS YOURS. YOU KEEP STARING.',
+    'YOU WONDER IF THEY HAD A NIGHT SHIFT TOO. YOU HOPE IT ENDED.',
+  ];
 
   // Each OR's neglected patient: what's wrong, what you do, and how the anesthesiologist takes it.
   const ORS = [
@@ -270,6 +326,17 @@
   // Returns dialog lines; may mutate game state g. (x, y) is the tile being poked.
   W.interact = (ch, g, x) => {
     switch (ch) {
+      case 'Z': case 'z': return [STARES[g.stares++ % STARES.length]];
+      case 'e': case 'f':
+        if (g.morgueRest) return ['YOU LIE DOWN AGAIN. THE PAGER GOES OFF BEFORE YOUR HEAD TOUCHES THE STEEL.'];
+        g.morgueRest = true;
+        return ['AN EMPTY STEEL TABLE. YOU LIE DOWN ON IT.', 'IT IS COLD. IT IS PERFECT. FOR ONE MOMENT, NOBODY NEEDS ANYTHING FROM YOU.',
+          '...THEN YOUR PAGER GOES OFF.', `+${g.heal('san', 6)} SANITY.`];
+      case 'Y': return [pick([
+        'A WALL OF DRAWERS. ONE IS LABELED "RESERVED: DR. MALPHAS." THE DATE IS BLANK. IT WILL ALWAYS BE BLANK.',
+        'YOU OPEN AN EMPTY DRAWER AND CLIMB HALFWAY IN. IT IS DARK. IT IS QUIET. IT IS NOT FOR YOU.',
+        'YOU KNOCK ON A DRAWER. NOBODY KNOCKS BACK. LUCKY THEM.',
+      ])];
       case 'O': case 'Q': case 'M': {
         const k = x < 7 ? 0 : x < 14 ? 1 : 2;
         if (g.orFix[k]) return ['THE PATIENT IS STABLE. FOR NOW. SOMEONE HAS ALREADY STARTED A BETTING POOL ON HOW LONG IT LASTS.'];
