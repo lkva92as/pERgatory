@@ -24,6 +24,7 @@
     }
     return false;
   };
+  TB.done = (tb) => tb.page === tb.pages.length - 1 && tb.shown >= pageText(tb).length;
   TB.draw = (tb) => {
     G.box(0, 96, 160, 48);
     if (!tb) return;
@@ -37,8 +38,7 @@
   let s = null;
   const rnd = (a, b) => a + Math.floor(Math.random() * (b - a + 1));
   const STAT = { san: 'SANITY', rsp: 'SELF-RESPECT' };
-  const SHORT = { diagnose: 'DIAGNOSE', reassure: 'REASSURE', pamphlet: 'PAMPHLET', hellfire: 'HELLFIRE',
-    sandwich: 'SANDWICH', icechips: 'ICE CHIPS', worknote: 'WORK NOTE', blanket: 'BLANKET' };
+  const short = (id) => (MOVES.find((m) => m.id === id) || ITEMS[id]).short;
   const MENU = ['TREAT', 'ITEMS', 'CHART', 'DISCHARGE'];
 
   const push = (e) => s.q.push(e);
@@ -60,7 +60,7 @@
     SFX.music('battle');
     push({ k: 'slide' });
     if (where) say(where);
-    say(visit > 1 ? p.back.replace('{N}', visit) : p.intro);
+    say(visit > 1 && p.back ? p.back.replace('{N}', visit) : p.intro);
     say(`${p.name}!\nCHIEF COMPLAINT: ${p.cc}`);
     push({ k: 'menu' });
   };
@@ -194,7 +194,7 @@
     const p = s.p;
     s.mode = 'busy';
     say(`CHART: ${p.chart}`);
-    say(`WEAKNESS: ${SHORT[p.weak]}.` + (p.resist ? ` RESISTS: ${SHORT[p.resist]}.` : '') + (p.noRun ? ' CANNOT BE DISCHARGED.' : ''));
+    say(`WEAKNESS: ${short(p.weak)}.` + (p.resist ? ` RESISTS: ${short(p.resist)}.` : '') + (p.noRun ? ' CANNOT BE DISCHARGED.' : ''));
     s.charted = true;
     push({ k: 'menu' });
   }
@@ -303,7 +303,7 @@
       G.bar(24, 15, 60, s.hpShown / s.hpMax);
       G.rect(2, 22, 86, 1, 3);
       G.rect(88, 12, 1, 11, 3);
-      if (s.charted) G.text('WEAK:' + SHORT[p.weak], 4, 27, 2);
+      if (s.charted) G.text('WEAK:' + short(p.weak), 4, 27, 2);
 
       G.text('DR.MALPHAS', 64, 52);
       G.text('L' + g.lv, 156 - G.textW('L' + g.lv), 52);

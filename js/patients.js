@@ -7,22 +7,28 @@ window.ITEMS = {
   coffee:   { name: 'COFFEE', desc: '+15 SANITY. TASTES LIKE REGRET.', heal: { san: 15 } },
   poster:   { name: 'MOTIVATIONAL POSTER', desc: '+12 SELF-RESPECT. HANG IN THERE, KITTEN.', heal: { rsp: 12 } },
   donut:    { name: 'STALE DONUT', desc: '+8 SAN, +6 RSP. FROM THE 1987 STAFF MEETING.', heal: { san: 8, rsp: 6 } },
-  sandwich: { name: 'TURKEY SANDWICH', desc: '16 DMG. THE ANCIENT CURRENCY OF THE ER.', dmg: 16,
+  sandwich: { name: 'TURKEY SANDWICH', short: 'SANDWICH', desc: '16 DMG. THE ANCIENT CURRENCY OF THE ER.', dmg: 16,
     use: '{P} EATS IT IN TWO BITES. "GOT ANY MORE?"' },
-  icechips: { name: 'ICE CHIPS', desc: '10 DMG. PATIENTS LOVE THEM. NOBODY KNOWS WHY.', dmg: 10,
+  icechips: { name: 'ICE CHIPS', short: 'ICE CHIPS', desc: '10 DMG. PATIENTS LOVE THEM. NOBODY KNOWS WHY.', dmg: 10,
     use: '{P} CRUNCHES THE ICE CHIPS. LOUDLY. IN YOUR DIRECTION.' },
-  worknote: { name: 'WORK NOTE', desc: '14 DMG. EXCUSES THEM FROM LIFE.', dmg: 14,
+  worknote: { name: 'WORK NOTE', short: 'WORK NOTE', desc: '14 DMG. EXCUSES THEM FROM LIFE.', dmg: 14,
     use: '{P} READS THE NOTE. "THIS DOESN\'T EVEN SAY I\'M DYING."' },
-  blanket:  { name: 'WARM BLANKET', desc: '12 DMG. FRESH FROM THE BLANKET WARMER.', dmg: 12,
+  blanket:  { name: 'WARM BLANKET', short: 'BLANKET', desc: '12 DMG. FRESH FROM THE BLANKET WARMER.', dmg: 12,
     use: '{P} WRAPS UP IN THE WARM BLANKET LIKE A BURRITO.' },
+  charger:  { name: 'PHONE CHARGER', short: 'CHARGER', desc: '13 DMG. THE MOST REQUESTED ITEM IN ANY ER.', dmg: 13,
+    use: '{P} PLUGS IN. 3% BATTERY. {P} IS CALMER, BUT NOT BY MUCH.' },
+  gingerale: { name: 'GINGER ALE', short: 'GINGER ALE', desc: '11 DMG. FLAT. ROOM TEMPERATURE. BELOVED.', dmg: 11,
+    use: '{P} SIPS THE GINGER ALE AND ASKS IF THERE IS ANY ICE.' },
+  crackers: { name: 'GRAHAM CRACKERS', short: 'CRACKERS', desc: '9 DMG. TWO PER PACK, BY HOSPITAL LAW.', dmg: 9,
+    use: '{P} EATS THE GRAHAM CRACKERS AND ASKS FOR A THIRD ONE.' },
 };
-window.START_ITEMS = { coffee: 2, poster: 1, sandwich: 1, icechips: 2 };
+window.START_ITEMS = { coffee: 2, poster: 1, sandwich: 1, icechips: 2, charger: 1, gingerale: 1 };
 
 window.MOVES = [
-  { id: 'diagnose', name: 'DIAGNOSE', desc: '6-9 DMG. RELIABLE.', min: 6, max: 9 },
-  { id: 'reassure', name: 'REASSURE', desc: '3-6 DMG. HALVES NEXT COMPLAINT.', min: 3, max: 6, calm: true },
-  { id: 'pamphlet', name: 'PAMPHLET', desc: '10-15 DMG. MAY BACKFIRE.', min: 10, max: 15, backfire: 0.35 },
-  { id: 'hellfire', name: 'HELLFIRE GAZE', desc: '15-22 DMG. COSTS 6 RSP.', min: 15, max: 22, cost: 6 },
+  { id: 'diagnose', name: 'DIAGNOSE', short: 'DIAGNOSE', desc: '6-9 DMG. RELIABLE.', min: 6, max: 9 },
+  { id: 'reassure', name: 'REASSURE', short: 'REASSURE', desc: '3-6 DMG. HALVES NEXT COMPLAINT.', min: 3, max: 6, calm: true },
+  { id: 'pamphlet', name: 'PAMPHLET', short: 'PAMPHLET', desc: '10-15 DMG. MAY BACKFIRE.', min: 10, max: 15, backfire: 0.35 },
+  { id: 'hellfire', name: 'HELLFIRE GAZE', short: 'HELLFIRE', desc: '15-22 DMG. COSTS 6 RSP.', min: 15, max: 22, cost: 6 },
 ];
 
 window.PATIENTS = [
@@ -266,14 +272,5 @@ window.PATIENTS = [
     win: 'CHAD LEAVES, COUGHING ON THE DOOR HANDLE ON THE WAY OUT.' },
 ];
 
-// Build each patient's battle portrait once.
+// Build each regular's battle portrait once.
 window.PATIENTS.forEach((p) => { p.sprite = SPR.makePatient(p.look); });
-
-// Weighted pick, skipping anyone in `exclude` (patients already in a bay, or the one you just saw).
-window.pickPatient = (exclude = []) => {
-  let list = window.PATIENTS.filter((p) => !exclude.includes(p.id));
-  if (!list.length) list = window.PATIENTS;
-  let r = Math.random() * list.reduce((a, p) => a + p.w, 0);
-  for (const p of list) { r -= p.w; if (r <= 0) return p; }
-  return list[0];
-};

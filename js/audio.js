@@ -82,6 +82,7 @@
       case 'levelup': arp(t, [72, 74, 76, 77, 79, 81, 83, 84], 0.06); break;
       case 'gameover': arp(t, [69, 68, 67, 66, 65, 64, 63, 62, 61, 60, 0, 45], 0.14, 'square', 0.35); break;
       case 'clock':  arp(t, [96, 0, 96, 0, 96], 0.08, 'triangle', 0.5); break;
+      case 'ding':   tone(freq(88), t, 0.6, 'triangle', 0.5); tone(freq(84), t + 0.25, 0.8, 'triangle', 0.4); break;
     }
   };
 

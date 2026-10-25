@@ -34,7 +34,7 @@
   const press = (b, on) => {
     if (on) {
       SFX.unlock();
-      if (!audioOk && state === 'world') SFX.music('world'); // resumed from a snapshot before any input
+      if (!audioOk && state === 'world') SFX.music(WORLD.MUSIC); // resumed from a snapshot before any input
       audioOk = true;
       if (!I.down[b]) I.hit[b] = true;
     }
@@ -65,7 +65,8 @@
       san: 40, sanMax: 40, rsp: 30, rspMax: 30, lv: 1, xp: 0, next: 30,
       items: Object.assign({}, START_ITEMS), night: 1, min: 0, seen: 0,
       coffeeReady: true, napReady: true, vendIn: 0, bays: [null, null, null, null, null, null], bayTimer: 0,
-      met: {}, lastId: null, // visits per patient this shift; who you saw last
+      waiting: [], deck: null, met: {}, // waiting room queue; case deck; visits per regular this shift
+      floor: 'er', orFix: {}, pitched: 0, // which floor; OR patients you've rescued; night you last turned down Dr. Ether
       heal(k, n) { const b = this[k]; this[k] = Math.min(this[k + 'Max'], this[k] + n); return this[k] - b; },
       gainXp(n) {
         const msgs = [];
@@ -91,21 +92,38 @@
 
   function reset() {
     g = newGame();
+    WORLD.use('er');
     const s = WORLD.START;
     P = { x: s.x, y: s.y, px: s.x * TS, py: s.y * TS, dir: s.dir, moving: false, steps: 0 };
     WORLD.NPCS.forEach((n) => (n.i = 0));
-    spawnBay(); spawnBay();
+    arrive(5); roomNext(); roomNext();
     stepsSince = 0;
   }
 
-  function spawnBay() {
-    const empty = g.bays.map((b, i) => (b ? -1 : i)).filter((i) => i >= 0);
-    if (!empty.length) return -1;
-    const i = pick(empty);
-    g.bays[i] = pickPatient(inBays().concat(g.lastId));
-    return i;
+  // ---------- patient flow: arrivals sit in the waiting room; the nurse rooms them into empty bays ----------
+  const present = () => g.bays.concat(g.waiting).filter(Boolean).map((p) => p.tid);
+  function arrive(n) {
+    for (let i = 0; i < n; i++) {
+      const p = CLINIC.draw(g, present()), used = g.waiting.map((w) => w.seat);
+      p.seat = WORLD.ER_SEATS.findIndex((_, k) => !used.includes(k)); // -1: standing room only
+      g.waiting.push(p);
+    }
   }
-  const inBays = () => g.bays.filter(Boolean).map((p) => p.id);
+  function leaveWaiting(p) {
+    g.waiting = g.waiting.filter((w) => w !== p);
+    const stander = g.waiting.find((w) => w.seat < 0);
+    if (stander) stander.seat = p.seat;
+    return p;
+  }
+  // Rooms the longest-waiting patient into an empty bay; returns the bay number, or 0.
+  function roomNext() {
+    const i = g.bays.findIndex((b) => !b);
+    if (i < 0 || !g.waiting.length) return 0;
+    g.bays[i] = leaveWaiting(g.waiting[0]);
+    return i + 1;
+  }
+  const flowMsg = (n, bay) => (n > 1 ? `THE DOORS SLIDE OPEN. ${n} NEW PATIENTS.` : 'THE DOORS SLIDE OPEN. A NEW PATIENT.')
+    + (bay ? ` NURSE BEV ROOMS SOMEONE INTO BAY ${bay}.` : '') + ` WAITING ROOM: ${g.waiting.length}.`;
 
   function fadeOut(cb) { fade = { t: 0, cb }; }
   function stepFade() {
@@ -121,7 +139,22 @@
     lines = [].concat(lines);
     dlg = { tb: TB.make(lines.shift()), lines, cb };
   }
+  // A yes/no question; cb(true) for YES. B answers NO.
+  function ask(q, cb) {
+    dlg = { tb: TB.make(q), lines: [], choice: { i: 0, cb } };
+  }
   function updDialog() {
+    const c = dlg.choice;
+    if (c && TB.done(dlg.tb)) {
+      if (I.pressed('up') || I.pressed('down')) { c.i = 1 - c.i; SFX.play('blip'); }
+      if (I.pressed('a') || I.pressed('b')) {
+        const yes = I.pressed('a') && c.i === 0;
+        dlg = null;
+        SFX.play(yes ? 'select' : 'back');
+        c.cb(yes);
+      }
+      return;
+    }
     if (!TB.update(dlg.tb, I)) return;
     if (dlg.lines.length) dlg.tb = TB.make(dlg.lines.shift());
     else { const cb = dlg.cb; dlg = null; if (cb) cb(); }
@@ -153,18 +186,22 @@
     stepsSince++;
     if (++g.bayTimer >= 40) {
       g.bayTimer = 0;
-      const i = spawnBay();
-      if (i >= 0) { SFX.play('page'); return say(`OVERHEAD: "NEW PATIENT IN BAY ${WORLD.BAYS[i].n}."`); }
+      arrive(1);
+      SFX.play('page');
+      return say(flowMsg(1, roomNext()));
     }
     if (g.min >= 720) return nightEnd();
-    // Waiting room: someone not yet roomed corners you. Hallway: a bay patient comes looking for you.
+    // Waiting room: someone seated there corners you. Hallway: a bay patient comes looking for you.
     const zone = WORLD.encounterZone(P.x, P.y);
     if (!zone || stepsSince <= 6 || Math.random() >= 1 / 14) return;
-    if (zone === 'waiting') return encounter(pickPatient(inBays().concat(g.lastId)), null, -1);
+    if (zone === 'waiting') {
+      if (g.waiting.length) { const p = pick(g.waiting); encounter(p, null, { wait: p }); }
+      return;
+    }
     const full = g.bays.map((b, i) => (b ? i : -1)).filter((i) => i >= 0);
     if (!full.length) return;
     const i = pick(full);
-    encounter(g.bays[i], `THE PATIENT FROM BAY ${WORLD.BAYS[i].n} HAS FOLLOWED YOU INTO THE HALL.`, i);
+    encounter(g.bays[i], `THE PATIENT FROM BAY ${i + 1} HAS FOLLOWED YOU INTO THE HALL.`, { bay: i });
   }
 
   function nightEnd() {
@@ -180,13 +217,54 @@
     const [dx, dy] = DIRS[P.dir], fx = P.x + dx, fy = P.y + dy, ch = WORLD.tile(fx, fy);
     let npc = WORLD.npcAt(fx, fy);
     if (!npc && WORLD.isCounter(ch)) npc = WORLD.npcAt(fx + dx, fy + dy);
+    if (npc && npc.pitch) return pitch(npc);
     if (npc) return say(`${npc.name}:\n${npc.lines[npc.i++ % npc.lines.length]}`);
+    if (ch === 'L') {
+      const up = WORLD.id === 'er';
+      return ask(up ? 'THE ELEVATOR. A HANDWRITTEN SIGN SAYS "SURGERY." GO UP?' : 'TAKE THE ELEVATOR BACK DOWN TO THE ER?',
+        (yes) => yes && ride(up ? 'or' : 'er'));
+    }
     const bi = WORLD.BAYS.findIndex((b) => b.x === fx && b.y === fy);
-    if (bi >= 0 && g.bays[bi]) return encounter(g.bays[bi], `YOU PULL BACK THE CURTAIN ON BAY ${WORLD.BAYS[bi].n}.`, bi);
-    const lines = WORLD.interact(ch, g);
+    if (bi >= 0 && g.bays[bi]) return encounter(g.bays[bi], `YOU PULL BACK THE CURTAIN ON BAY ${WORLD.BAYS[bi].n}.`, { bay: bi });
+    const si = WORLD.seatAt(fx, fy), sitter = si >= 0 && g.waiting.find((w) => w.seat === si);
+    if (sitter) return encounter(sitter, 'YOU MAKE EYE CONTACT WITH SOMEONE IN THE WAITING ROOM. ROOKIE MISTAKE.', { wait: sitter });
+    const lines = WORLD.interact(ch, g, fx, fy);
     if (!lines) return;
     if (/^\+/.test(lines[lines.length - 1])) SFX.play('heal');
     say(lines);
+  }
+
+  function ride(to) {
+    fadeOut(() => {
+      WORLD.use(to);
+      g.floor = to;
+      const a = WORLD.ARRIVE;
+      Object.assign(P, { x: a.x, y: a.y, px: a.x * TS, py: a.y * TS, dir: a.dir, moving: false });
+      stepsSince = 0;
+      SFX.music(WORLD.MUSIC);
+      SFX.play('ding');
+      say(to === 'or'
+        ? ['DING. SURGICAL FLOOR.', 'IT IS VERY QUIET UP HERE. EXCEPT FOR THE ALARMS. NOBODY SEEMS TO HEAR THE ALARMS.']
+        : 'DING. EMERGENCY DEPARTMENT. THE NOISE HITS YOU LIKE A WALL.');
+    });
+  }
+
+  // Dr. Ether's residency pitch. Turning it down is good for you, once a night.
+  function pitch(npc) {
+    say(`${npc.name}:\n${npc.lines[npc.i++ % npc.lines.length]}`, () => ask('"SO. APPLY TO ANESTHESIA RESIDENCY?"', (yes) => {
+      if (yes) {
+        return say(['DR. ETHER HANDS YOU A ONE-PAGE APPLICATION. QUESTION 1: "FAVORITE BETTING APP?" QUESTION 2: "CAN YOU SIT STILL?"',
+          `DR. ETHER STAMPS IT WITHOUT READING IT. "WELCOME TO THE WAITLIST. YOU ARE NUMBER ${fmt(shiftNo)}."`,
+          '"WE\'LL CALL YOU." DR. ETHER DOES NOT TAKE YOUR NUMBER.', 'YOU ARE STILL AN ER DOCTOR. YOU WILL ALWAYS BE AN ER DOCTOR.']);
+      }
+      const lines = ['"SUIT YOURSELF. MORE FOR US." DR. ETHER GOES BACK TO A HAND OF ONLINE POKER.'];
+      if (g.pitched !== g.night) {
+        g.pitched = g.night;
+        SFX.play('heal');
+        lines.push(`+${g.heal('rsp', 2)} SELF-RESPECT. YOU STILL HAVE STANDARDS.`);
+      }
+      say(lines);
+    }));
   }
 
   function updWorld() {
@@ -208,12 +286,12 @@
   }
 
   // ---------- encounters ----------
-  function encounter(p, intro, bay) {
-    g.lastId = p.id;
+  // `from` says where the patient was: { bay: i }, { wait: patient }, or {} (debug).
+  function encounter(p, intro, from) {
     SFX.music(null);
     SFX.play('encounter');
     state = 'trans';
-    trans = { t: 0, p, intro, bay };
+    trans = { t: 0, p, intro, from };
   }
   function updTrans() {
     trans.t++;
@@ -223,16 +301,26 @@
     const tr = trans;
     trans = null;
     state = 'battle';
-    BATTLE.start(tr.p, g, tr.intro, (r) => battleOver(r, tr.bay));
+    BATTLE.start(tr.p, g, tr.intro, (r) => battleOver(r, tr.from));
   }
-  function battleOver(r, bay) {
+  function battleOver(r, from) {
     if (r === 'lose') return fadeOut(() => { state = 'gameover'; over = { t: 0 }; });
-    if (bay >= 0) g.bays[bay] = null;
+    if (from.bay >= 0) g.bays[from.bay] = null;
+    if (from.wait) leaveWaiting(from.wait);
     if (r === 'win') {
-      g.seen++; g.coffeeReady = true; g.napReady = true; g.vendIn = Math.max(0, g.vendIn - 1); g.min += 35;
+      g.seen++; g.coffeeReady = true; g.napReady = true; g.orFix = {}; g.vendIn = Math.max(0, g.vendIn - 1); g.min += 35;
     } else g.min += 15;
+    // The doors never stop: every patient out means at least one more in, more as the nights go on.
+    const n = 1 + (Math.random() < 0.25 + 0.1 * g.night ? 1 : 0);
+    arrive(n);
+    const bay = roomNext();
     stepsSince = 0;
-    fadeOut(() => { state = 'world'; SFX.music('world'); if (g.min >= 720) nightEnd(); });
+    fadeOut(() => {
+      state = 'world';
+      SFX.music(WORLD.MUSIC);
+      SFX.play('page');
+      say(flowMsg(n, bay), () => { if (g.min >= 720) nightEnd(); });
+    });
   }
 
   // ---------- start menu ----------
@@ -282,7 +370,7 @@
       [
         'DR. MALPHAS, M.D.', 'DEMON. NIGHT SHIFT.', '',
         `BURNOUT LV   ${g.lv}`, `BURNOUT PTS  ${g.xp}/${g.next}`, `SANITY       ${g.san}/${g.sanMax}`,
-        `SELF-RESPECT ${g.rsp}/${g.rspMax}`, `NIGHT        ${g.night}`, `PATIENTS     ${g.seen}`,
+        `SELF-RESPECT ${g.rsp}/${g.rspMax}`, `NIGHT        ${g.night}`, `PATIENTS     ${g.seen}`, `WAITING      ${g.waiting.length}`,
         `CLOCK        ${g.clockStr()}`, `SHIFT #${fmt(shiftNo)}`,
       ].forEach((r, i) => G.text(r, 10, 10 + i * 11, i === 1 || i === 10 ? 2 : 3));
       return;
@@ -332,6 +420,7 @@
     G.clear(3);
     WORLD.draw(cx, cy);
     WORLD.drawBays(g.bays, cx, cy);
+    WORLD.drawWaiting(g.waiting, cx, cy);
     WORLD.drawNPCs(cx, cy);
     drawPlayer(cx, cy);
     G.rect(0, 0, 160, 9, 3);
@@ -340,6 +429,12 @@
     G.text(st, 158 - G.textW(st), 1, g.san < 10 || g.rsp < 8 ? 1 : 0);
     if (menu) drawMenu();
     if (dlg) TB.draw(dlg.tb);
+    if (dlg && dlg.choice && TB.done(dlg.tb)) {
+      G.box(112, 66, 48, 32);
+      G.text('YES', 128, 74);
+      G.text('NO', 128, 84);
+      G.text('▶', 119, 74 + dlg.choice.i * 10);
+    }
     if (trans && trans.t >= 24) {
       const w = Math.round(160 * Math.min(1, (trans.t - 24) / 32));
       for (let i = 0; i < 9; i++) G.rect(i % 2 ? 0 : 160 - w, i * 16, w, 16, 3);
@@ -426,16 +521,21 @@
     if (!P || !['world', 'trans', 'battle'].includes(state)) return {};
     const d = {};
     for (const k of Object.keys(g)) if (typeof g[k] !== 'function') d[k] = g[k];
-    d.bays = g.bays.map((p) => p && p.id);
+    d.bays = g.bays.map((p) => p && p.spec);
+    d.waiting = g.waiting.map((p) => ({ spec: p.spec, seat: p.seat }));
     return { g: d, P: { x: P.x, y: P.y, dir: P.dir } };
   }
   function restore(d) {
     if (!d || !d.g || !d.P) return;
     reset();
+    const make = (spec) => spec && CLINIC.make(typeof spec === 'string' ? { tid: spec } : spec); // older snapshots stored ids
     Object.assign(g, d.g, {
       items: Object.assign({}, d.g.items),
-      bays: d.g.bays.map((id) => PATIENTS.find((p) => p.id === id) || null),
+      bays: d.g.bays.map((s) => make(s) || null),
+      waiting: (d.g.waiting || g.waiting.map((p) => ({ spec: p.spec, seat: p.seat })))
+        .map((w) => { const p = make(w.spec); if (p) p.seat = w.seat; return p; }).filter(Boolean),
     });
+    WORLD.use(g.floor || 'er');
     Object.assign(P, d.P, { px: d.P.x * TS, py: d.P.y * TS, moving: false });
     state = 'world';
   }
@@ -447,7 +547,9 @@
   // Console hooks for testing: DEBUG.press('a'); DEBUG.run(60);
   window.DEBUG = {
     get g() { return g; }, get state() { return state; }, get P() { return P; }, get dlg() { return dlg; },
-    encounter: (i) => { dlg = null; encounter(PATIENTS[i || 0], null, -1); },
+    encounter: (i) => { dlg = null; encounter(PATIENTS[i || 0], null, {}); },
+    walkin: (tid) => { dlg = null; encounter(CLINIC.make(CLINIC.roll(tid)), null, {}); },
+    arrive, roomNext,
     press: (b) => { I.hit[b] = true; },
     hold: (b, on) => { I.down[b] = on; },
     run: (n = 1) => { for (let i = 0; i < n; i++) tick(); draw(); },

@@ -1,11 +1,11 @@
-// The ER: tiles, map, NPCs, and things to poke at.
+// The hospital: tiles, maps (ER downstairs, surgical floor upstairs), NPCs, and things to poke at.
 (function () {
   const W = window.WORLD = {};
   const TS = 16;
   W.TS = TS;
 
-  W.MAP = [
-    '##ww##C##ww####B##E###w####w##',
+  const ER = [
+    '##ww##C##ww####BL#E###w####w##',
     '#,,,,,,,,,,P#.......#b.ub.ub.#',
     '#,cccc,cccc,#.......#..u..u..#',
     '#,,,,,,,,,,,#.NNXNN..........#',
@@ -20,21 +20,33 @@
     '#P,,,,,,,,,P#.......#::::::::#',
     '#####DD#######################',
   ];
-  W.MAP.unshift('##############################');
-  W.MAP.forEach((r, i) => { if (r.length !== 30) console.warn('map row', i, 'len', r.length); });
-  W.w = W.MAP[0].length;
-  W.h = W.MAP.length;
+  ER.unshift('##############################');
+
+  // Surgical floor: three ORs above a hallway. The elevator is on the hallway's back wall.
+  const OR = [
+    '######################',
+    '######################',
+    '#;;M;;;#;;M;;;#;;M;;;#',
+    '#;;O;;;#;;O;;;#;;O;;;#',
+    '#;;Q;;;#;;Q;;;#;;Q;;;#',
+    '#;;;;;;#;;;;;;#;;;;;;#',
+    '#L#;;#####;;#####;;###',
+    '#____________________#',
+    '#____________________#',
+    '######################',
+  ];
+  [ER, OR].forEach((m) => m.forEach((r, i) => { if (r.length !== m[0].length) console.warn('map row', i, 'len', r.length); }));
 
   W.START = { x: 16, y: 7, dir: 'down' };
-  W.BAYS = [
+  const ER_BAYS = [
     { x: 21, y: 2, n: 1 }, { x: 24, y: 2, n: 2 }, { x: 27, y: 2, n: 3 },
     { x: 21, y: 7, n: 4 }, { x: 24, y: 7, n: 5 }, { x: 27, y: 7, n: 6 },
   ];
 
   W.tile = (x, y) => (x < 0 || y < 0 || x >= W.w || y >= W.h) ? '#' : W.MAP[y][x];
-  const WALLISH = '#wCBE';
+  const WALLISH = '#wCBEL';
   const isWall = (ch) => WALLISH.includes(ch);
-  W.solid = (x, y) => !',.:'.includes(W.tile(x, y));
+  W.solid = (x, y) => !',.:;_'.includes(W.tile(x, y));
   W.isCounter = (ch) => ch === 'T' || ch === 'N' || ch === 'X';
   // Random encounters happen on public floors, never in the break room.
   W.encounterZone = (x, y) => {
@@ -104,11 +116,35 @@
   t.couch = T(t.brk, (p) => { p.rect(0, 3, 16, 12, 3).rect(1, 4, 14, 4, 2).rect(1, 8, 14, 6, 1).line(8, 8, 8, 13, 2); });
   t.rack = T(t.brk, (p) => { p.line(8, 2, 8, 14, 3).line(5, 15, 11, 15, 3).line(5, 2, 11, 2, 3).rect(8, 3, 6, 9, 3).rect(9, 4, 4, 7, 0); });
   t.dark = T(null, (p) => p.fill(3));
+  t.elevator = T(t.wallFace, (p) => {
+    p.rect(2, 1, 12, 12, 3).rect(3, 2, 10, 11, 2).line(8, 2, 8, 12, 3);
+    p.set(5, 5, 0).line(4, 6, 6, 6, 0).line(10, 5, 12, 5, 0).set(11, 6, 0); // up / down arrows
+  });
+  // Surgical floor
+  t.orFloor = T(null, (p) => { p.fill(0); for (let i = 0; i < 16; i += 8) p.line(i, 0, i, 15, 1).line(0, i, 15, i, 1); });
+  t.monA = T(t.orFloor, (p) => {
+    p.rect(3, 1, 10, 9, 3).rect(4, 2, 8, 6, 1).rect(7, 10, 2, 4, 3).rect(5, 14, 6, 1, 3);
+    p.line(4, 5, 6, 5, 3).line(6, 5, 7, 2, 3).line(7, 2, 8, 7, 3).line(8, 7, 9, 5, 3).line(9, 5, 11, 5, 3);
+  });
+  t.monB = T(t.monA, (p) => { p.rect(4, 2, 8, 6, 3).rect(7, 3, 2, 3, 0).rect(7, 7, 2, 1, 0); }); // alarm: "!"
+  t.tableHead = T(t.orFloor, (p) => {
+    p.rect(1, 0, 14, 16, 3).rect(2, 1, 12, 15, 1);
+    p.ellipse(8, 6, 4.5, 4.5, 3).ellipse(8, 6, 3.5, 3.5, 0);
+    p.line(6, 5, 7, 5, 3).line(9, 5, 10, 5, 3);
+    p.line(8, 8, 14, 1, 2); // breathing tube
+    p.rect(2, 11, 12, 5, 2); // drape
+  });
+  t.tableFoot = T(t.orFloor, (p) => {
+    p.rect(1, 0, 14, 16, 3).rect(2, 0, 12, 15, 2);
+    p.line(5, 1, 5, 9, 3).line(10, 1, 10, 9, 3);
+    p.ellipse(5.5, 12, 2, 2.5, 1).ellipse(10.5, 12, 2, 2.5, 1);
+  });
 
   const CH = {
     '.': 'floor', ',': 'carpet', ':': 'brk', c: 'chair', T: 'triage', N: 'counter', X: 'computer',
     b: 'bed', u: 'curtain', D: 'door', P: 'plant', K: 'coffee', V: 'vend', S: 'couch', R: 'rack',
-    w: 'window', C: 'clock', B: 'board', E: 'exit',
+    w: 'window', C: 'clock', B: 'board', E: 'exit', L: 'elevator',
+    ';': 'orFloor', _: 'floor', O: 'tableHead', Q: 'tableFoot',
   };
 
   function tileSprite(x, y) {
@@ -117,6 +153,7 @@
       if (x < 0 || y < 0 || x >= W.w || y >= W.h) return t.dark;
       return isWall(W.tile(x, y + 1)) ? t.wallTop : t.wallFace;
     }
+    if (ch === 'M') return (G.frame >> 4) % 2 ? t.monB : t.monA; // the alarms never stop
     return t[CH[ch]] || t.dark;
   }
 
@@ -128,9 +165,10 @@
   };
 
   // ---------- NPCs ----------
-  W.NPCS = [
+  const ER_NPCS = [
     { x: 16, y: 3, spr: 'nurse', name: 'NURSE BEV', lines: [
       "IF SOMEONE ASKS FOR A SANDWICH, IT'S GARY. IT'S ALWAYS GARY.",
+      "THE ELEVATOR GOES UP TO SURGERY. DON'T GO UP THERE. THEY'LL TRY TO RECRUIT YOU.",
       "I'VE WORKED NIGHTS FOR 300 YEARS. YOU GET USED TO IT.\n(YOU DO NOT GET USED TO IT.)",
       'TIP: CHART A PATIENT TO FIND THEIR WEAKNESS. EVERYONE HAS ONE. MINE IS NIGHTS.',
       "DON'T GET ATTACHED TO AN EMPTY BAY. THEY ALL COME BACK. FRANK ESPECIALLY.",
@@ -163,14 +201,80 @@
       'THEY TOLD ME THIS WAS A TEMPORARY POSITION. THAT WAS FOUR LIFETIMES AGO.',
     ] },
   ];
-  W.NPCS.forEach((n) => { n.i = 0; n.dir = 'down'; });
+  // Upstairs, everyone is "investing."
+  const OR_NPCS = [
+    { x: 2, y: 3, spr: 'anesth', name: 'DR. NITROUS (ANESTHESIA)', lines: [
+      "SHH. I'M INVESTING. *TAPS PHONE* COME ON, RED. COME ON, RED.",
+      "IT'S NOT GAMBLING. IT'S A DIVERSIFIED PORTFOLIO OF FOOTBALL GAMES.",
+      "THE BEEPING? THAT'S JUST THE MARKET OPENING. IGNORE IT.",
+      'YOU SHOULD DO ANESTHESIA. YOU SIT. YOU SCROLL. THE PATIENT SLEEPS. EVERYBODY WINS. MOSTLY ME.',
+    ] },
+    { x: 9, y: 3, spr: 'anesth', name: 'DR. VAPOR (ANESTHESIA)', lines: [
+      'I PUT MY WHOLE SALARY ON A CRYPTO COIN WITH A DOG ON IT. LONG-TERM PLAY.',
+      "THE PATIENT? STABLE. I ASSUME. I HAVEN'T LOOKED UP SINCE 2019.",
+      "THIS STOCK HAS GONE DOWN SIX DAYS IN A ROW. THAT MEANS IT'S DUE. THAT'S MATH.",
+      'YOU LOOK LIKE ANESTHESIA MATERIAL. CALM. DEAD INSIDE. PERFECT. TALK TO DR. ETHER.',
+    ] },
+    { x: 16, y: 3, spr: 'anesth', name: 'DR. HALOTHANE (ANESTHESIA)', lines: [
+      'DOUBLE OR NOTHING ON WHETHER THE SURGEON FINISHES BEFORE 4 AM. WANT IN?',
+      "I'M NOT IGNORING THE PATIENT. I'M MONITORING THE PATIENT. FROM MY PHONE. WHICH IS SHOWING HORSE RACING.",
+      "SATS ARE 80? THAT'S ONLY 20 POINTS FROM 100. I'VE BEEN DOWN WORSE.",
+      'WE CALL IT "THE GAS PASSER\'S PORTFOLIO." IT\'S MOSTLY SCRATCH TICKETS.',
+    ] },
+    { x: 13, y: 8, spr: 'anesth', name: 'DR. ETHER (PROGRAM DIRECTOR)', pitch: true, lines: [
+      '"MALPHAS! WE\'VE BEEN WATCHING YOU. YOU HAVE THE PERFECT ANESTHESIA PERSONALITY: NONE."',
+      '"THINK ABOUT IT. NO PATIENTS TALKING AT YOU. THEY\'RE ALL ASLEEP. THAT\'S THE WHOLE JOB."',
+      '"WE GET A PHONE STIPEND. AND A BETTING STIPEND. WE CALL IT A PHONE STIPEND."',
+      '"THE CHAIR SPINS. THE PATIENT SLEEPS. THE MARKETS NEVER CLOSE. IT\'S PARADISE."',
+    ] },
+  ];
+
+  // The skeleton keeps its own chair; every other waiting-room chair is a seat.
+  const seatsOf = (rows, npcs) => {
+    const s = [];
+    rows.forEach((r, y) => [...r].forEach((ch, x) => { if (ch === 'c' && !npcs.some((n) => n.x === x && n.y === y)) s.push({ x, y }); }));
+    return s;
+  };
+  const MAPS = {
+    er: { rows: ER, npcs: ER_NPCS, bays: ER_BAYS, arrive: { x: 16, y: 2, dir: 'down' }, music: 'world' },
+    or: { rows: OR, npcs: OR_NPCS, bays: [], arrive: { x: 1, y: 7, dir: 'down' }, music: 'title' },
+  };
+  Object.values(MAPS).forEach((m) => { m.seats = seatsOf(m.rows, m.npcs); m.npcs.forEach((n) => { n.i = 0; n.dir = 'down'; }); });
+  W.ER_SEATS = MAPS.er.seats; // the waiting room is downstairs whichever floor you're on
+
+  // Switch floors. Everything else reads the current floor through these fields.
+  W.use = (id) => {
+    const m = MAPS[id];
+    Object.assign(W, { id, MAP: m.rows, w: m.rows[0].length, h: m.rows.length, NPCS: m.npcs, BAYS: m.bays, SEATS: m.seats, ARRIVE: m.arrive, MUSIC: m.music });
+  };
+  W.use('er');
   W.npcAt = (x, y) => W.NPCS.find((n) => n.x === x && n.y === y) || null;
+  W.seatAt = (x, y) => W.SEATS.findIndex((s) => s.x === x && s.y === y);
+
+  // Each OR's neglected patient: what's wrong, what you do, and how the anesthesiologist takes it.
+  const ORS = [
+    ['THE MONITOR IS SCREAMING. SATS: 81%. DR. NITROUS IS WATCHING A ROULETTE WHEEL SPIN.',
+      'YOU TURN UP THE OXYGEN. THE NUMBERS CLIMB. THE ALARM GOES QUIET.',
+      'DR. NITROUS, NOT LOOKING UP: "THANKS. I WAS JUST ABOUT TO DO THAT."'],
+    ['THE VENTILATOR IS UNPLUGGED. A PHONE CHARGER IS PLUGGED IN WHERE IT USED TO BE.',
+      "YOU PLUG THE VENTILATOR BACK IN. THE PATIENT'S CHEST STARTS RISING AGAIN.",
+      'DR. VAPOR: "HEY! I WAS AT 4%!"'],
+    ['THE PATIENT IS WAKING UP MID-SURGERY AND TRYING TO SIT UP. NOBODY HAS NOTICED.',
+      'YOU TURN THE GAS BACK UP. THE PATIENT LIES BACK DOWN WITH A SMALL, POLITE SIGH.',
+      'DR. HALOTHANE: "GOOD CATCH. I HAD MONEY ON SITTING ALL THE WAY UP, BUT GOOD CATCH."'],
+  ];
 
   // ---------- interactions with fixtures ----------
   const pick = (a) => a[Math.floor(Math.random() * a.length)];
-  // Returns dialog lines; may mutate game state g.
-  W.interact = (ch, g) => {
+  // Returns dialog lines; may mutate game state g. (x, y) is the tile being poked.
+  W.interact = (ch, g, x) => {
     switch (ch) {
+      case 'O': case 'Q': case 'M': {
+        const k = x < 7 ? 0 : x < 14 ? 1 : 2;
+        if (g.orFix[k]) return ['THE PATIENT IS STABLE. FOR NOW. SOMEONE HAS ALREADY STARTED A BETTING POOL ON HOW LONG IT LASTS.'];
+        g.orFix[k] = true;
+        return [...ORS[k], `+${g.heal('rsp', 3)} SELF-RESPECT. SOMEBODY HAS TO CARE.`];
+      }
       case 'D': return [pick([
         "THE SLIDING DOORS DON'T OPEN FOR YOU. THEY ONLY EVER OPEN INWARD.",
         'OUTSIDE, AN AMBULANCE IDLES. IT HAS BEEN IDLING SINCE 1974.',
@@ -183,7 +287,7 @@
       ])];
       case 'C': return [`THE CLOCK SAYS ${g.clockStr()}.`, pick([
         "IT'S TICKING. SLOWLY. SPITEFULLY.", 'YOU COULD SWEAR IT JUST WENT BACKWARDS.', 'SHIFT CHANGE IS AT 7:00 AM. ALLEGEDLY.'])];
-      case 'B': return [pick([
+      case 'B': return [`TRACKING BOARD: ${g.waiting.length} WAITING. ${g.bays.filter(Boolean).length} OF 6 BAYS FULL.`, pick([
         'EMPLOYEE OF THE MONTH: DR. MALPHAS.\nEVERY MONTH. FOREVER.',
         'REMINDER: PATIENT SATISFACTION SCORES ARE ETERNAL. SMILE!',
         'PIZZA PARTY CANCELLED DUE TO LOW MORALE. MORALE IS LOW DUE TO NO PIZZA.',
@@ -225,6 +329,12 @@
     for (const n of W.NPCS) {
       const bob = n.spr === 'ghost' ? Math.round(Math.sin(G.frame / 20 + n.x)) : 0;
       G.draw(SPR[n.spr], n.x * TS - camX, n.y * TS - camY - 2 + bob);
+    }
+  };
+  W.drawWaiting = (waiting, camX, camY) => {
+    for (const p of waiting) {
+      const s = W.SEATS[p.seat];
+      if (s) G.draw(SPR.patient, s.x * TS - camX, s.y * TS - camY - 4, (s.x + s.y) % 2 === 1);
     }
   };
   W.drawBays = (bays, camX, camY) => {

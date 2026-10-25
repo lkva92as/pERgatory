@@ -26,7 +26,9 @@ python serve.py
 - `js/gfx.js` – palette, sprites, bitmap text, UI boxes
 - `js/audio.js` – chiptune SFX and music (WebAudio)
 - `js/sprites.js` – overworld sprites and procedural battle portraits
-- `js/world.js` – ER map, NPCs, interactable fixtures
-- `js/patients.js` – patients, moves, items
+- `js/world.js` – ER and surgical-floor maps, NPCs, interactable fixtures
+- `js/patients.js` – regular patients, moves, items
+- `js/walkins.js` – walk-in cases based on real ER and 911 stories
+- `js/clinic.js` – patient deck, random walk-in people
 - `js/battle.js` – text box and battle system
 - `js/main.js` – input, game state, overworld, menus, main loop
