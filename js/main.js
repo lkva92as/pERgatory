@@ -69,6 +69,7 @@
       bayClean: [0, 0, 0, 0, 0, 0], // steps until a just-cleared bay can take a new patient
       floor: 'er', orFix: {}, pitched: 0, // which floor; OR patients you've rescued; night you last turned down Dr. Ether
       morgueRest: false, stares: 0, // lay on the morgue's empty table since the last patient; bodies stared at
+      psychMet: false, psychDone: false, psychGroupAt: -1, psychSteps: 0, bevPsych: false, // the 3F episode
       heal(k, n) { const b = this[k]; this[k] = Math.min(this[k + 'Max'], this[k] + n); return this[k] - b; },
       gainXp(n) {
         const msgs = [];
@@ -91,13 +92,14 @@
   const DIRS = { up: [0, -1], down: [0, 1], left: [-1, 0], right: [1, 0] };
   let g = newGame(), P = null, state = 'title', dlg = null, menu = null, trans = null, fade = null, over = null;
   let stepsSince = 0, bumpT = 0;
+  let cut = null, sleep = null; // an NPC walking on its own; the blackout screen
 
   function reset() {
     g = newGame();
     WORLD.use('er');
     const s = WORLD.START;
     P = { x: s.x, y: s.y, px: s.x * TS, py: s.y * TS, dir: s.dir, moving: false, steps: 0 };
-    WORLD.NPCS.forEach((n) => (n.i = 0));
+    WORLD.resetNpcs();
     arrive(5); roomNext(); roomNext();
     stepsSince = 0;
   }
@@ -187,6 +189,12 @@
   }
 
   function onStep() {
+    // On 3F nothing from the ER reaches you. Sooner or later, something kicks off.
+    if (WORLD.id === 'ps') {
+      g.psychSteps++;
+      if (!g.psychDone && ((g.psychGroupAt >= 0 && g.psychSteps - g.psychGroupAt >= 6) || g.psychSteps >= 90)) scuffle();
+      return;
+    }
     g.min += 0.5;
     stepsSince++;
     // A bay that finishes being cleaned gets the next patient right away.
@@ -230,11 +238,26 @@
     let npc = WORLD.npcAt(fx, fy);
     if (!npc && WORLD.isCounter(ch)) npc = WORLD.npcAt(fx + dx, fy + dy);
     if (npc && npc.pitch) return pitch(npc);
+    if (npc && npc.group && g.psychGroupAt < 0) return groupTherapy();
+    if (npc && npc.name === 'NURSE BEV' && g.psychDone && !g.bevPsych) {
+      g.bevPsych = true;
+      return say("NURSE BEV:\nTHE PSYCH WARD? DOC, THAT FLOOR'S BEEN CLOSED FOR CENTURIES. ...WHY DO YOU ASK?");
+    }
     if (npc) return say(`${npc.name}:\n${npc.lines[npc.i++ % npc.lines.length]}`);
     if (ch === 'L') {
-      const floors = [['or', 'SURGERY 2F'], ['er', 'ER 1F'], ['mo', 'MORGUE B1']].filter(([id]) => id !== WORLD.id);
+      if (WORLD.id === 'ps') return say(['THE ELEVATOR NEEDS A STAFF BADGE.', 'YOU DO NOT HAVE A STAFF BADGE. YOU HAVE A WRISTBAND.']);
+      const floors = [['ps', 'PSYCH 3F'], ['or', 'SURGERY 2F'], ['er', 'ER 1F'], ['mo', 'MORGUE B1']].filter(([id]) => id !== WORLD.id);
       return choose('THE ELEVATOR. SOMEONE HAS WRITTEN "WHY BOTHER" NEXT TO THE BUTTONS.',
-        floors.map((f) => f[1]).concat('STAY'), (i) => { if (i < floors.length) ride(floors[i][0]); });
+        floors.map((f) => f[1]).concat('STAY'), (i) => {
+          if (i >= floors.length) return;
+          if (floors[i][0] !== 'ps' || !g.psychDone) return ride(floors[i][0]);
+          const lines = ["THE 3F BUTTON WON'T LIGHT UP. IT'S CAKED IN DUST. NOBODY HAS PRESSED IT IN A VERY LONG TIME."];
+          if (WORLD.id === 'er') {
+            g.bevPsych = true;
+            lines.push("NURSE BEV (FROM THE DESK): \"THE PSYCH WARD? DOC, THAT FLOOR'S BEEN CLOSED FOR CENTURIES.\"", '"...YOU FEELING OKAY?"');
+          }
+          say(lines);
+        });
     }
     const bi = WORLD.BAYS.findIndex((b) => b.x === fx && b.y === fy);
     if (bi >= 0 && !g.bays[bi] && g.bayClean[bi]) return say(`MORT IS MOPPING BAY ${bi + 1}. IT WON'T STAY EMPTY FOR LONG.`);
@@ -256,13 +279,93 @@
       stepsSince = 0;
       SFX.music(WORLD.MUSIC);
       SFX.play('ding');
-      say(ARRIVALS[to]);
+      say(ARRIVALS[to], to === 'ps' && !g.psychMet ? orderlyRush : null);
     });
+  }
+
+  // ---------- 3F: the psych ward episode ----------
+  // An NPC walks a path of tiles at the player's pace; cb runs when it arrives.
+  function walkNpc(npc, path, cb) { cut = { npc, path, k: 0, cb }; }
+  function updCut() {
+    const n = cut.npc;
+    if (!n.ox && !n.oy) {
+      if (cut.k >= cut.path.length) { const cb = cut.cb; cut = null; return cb(); }
+      const [tx, ty] = cut.path[cut.k++];
+      n.ox = (n.x - tx) * TS; n.oy = (n.y - ty) * TS; n.x = tx; n.y = ty;
+    }
+    n.ox -= Math.sign(n.ox) * 2; n.oy -= Math.sign(n.oy) * 2;
+  }
+  function orderlyRush() {
+    g.psychMet = true;
+    SFX.play('page');
+    const o = WORLD.npcById('orderly'), path = [];
+    for (let x = o.x - 1; x >= 2; x--) path.push([x, 3]);
+    path.push([2, 2]);
+    walkNpc(o, path, () => say([
+      'ORDERLY DALE: "MALPHAS! THERE YOU ARE. WHERE WERE YOU? YOU CAN\'T JUST WANDER OFF THE UNIT."',
+      '"AND WHERE DID YOU EVEN GET A LAB COAT? WE TALKED ABOUT THIS. NO MORE DOCTOR."',
+      'YOU LOOK DOWN. YOU ARE WEARING STRIPED PAJAMAS. THERE IS A WRISTBAND ON YOUR WRIST. IT SAYS "MALPHAS."',
+      '"GROUP STARTS SOON. GO SAY HI TO EVERYBODY. AND STAY ON THE UNIT THIS TIME."',
+    ]));
+  }
+  function groupTherapy() {
+    say(['DR. OKAFOR: "WELCOME, EVERYONE. LET\'S GO AROUND THE CIRCLE."',
+      'LEON: "I\'M LEON. THIS WEEK I DIDN\'T YELL AT THE TOASTER." EVERYONE SNAPS.',
+      'PRIYA: "I\'M PRIYA. I SLEPT FOUR HOURS. IN A ROW." EVERYONE SNAPS LOUDER.'],
+    () => choose('DR. OKAFOR: "MALPHAS? WOULD YOU LIKE TO SHARE?"', ["I'M AN ER DOCTOR", "I'M A DEMON", 'PASS'], (i) => {
+      const share = [
+        ['"I\'M AN ER DOCTOR. I WORK NIGHTS. I CAN\'T LEAVE. THE PATIENTS NEVER STOP COMING."',
+          'THE GROUP NODS POLITELY. THEY HAVE HEARD THIS ONE BEFORE.',
+          'DR. OKAFOR: "AND HOW DOES IT FEEL, BEING NEEDED BY EVERYONE, ALL THE TIME?" YOU OPEN YOUR MOUTH. NOTHING COMES OUT.'],
+        ['"I\'M A DEMON. I WAS SENTENCED TO THE NIGHT SHIFT FOR CRIMES I CAN\'T REMEMBER."',
+          'LEON: "SAME, MAN."',
+          'DR. OKAFOR WRITES SOMETHING DOWN AND UNDERLINES IT. TWICE.'],
+        ['"PASS."', 'DR. OKAFOR: "THAT\'S OKAY. YOU SAID THAT LAST TIME TOO. AND THE TIME BEFORE THAT."',
+          '"...HOW MANY TIMES HAVE I BEEN TO GROUP?" DR. OKAFOR SMILES KINDLY AND DOES NOT ANSWER.'],
+      ][i];
+      g.psychGroupAt = g.psychSteps;
+      say(share.concat('GROUP ENDS. EVERYONE GETS A PUDDING CUP.'));
+    }));
+  }
+  function scuffle() {
+    g.psychDone = true;
+    SFX.play('hit');
+    say(['GUS: "HEY. THAT\'S MY PUDDING." IT IS YOUR PUDDING. YOU ARE PRETTY SURE IT IS YOUR PUDDING.',
+      'A BRIEF, INTENSE TUG-OF-WAR OVER A PUDDING CUP. LEON CHEERS. DOLORES KEEPS KNITTING.',
+      'THE PUDDING GOES EVERYWHERE.',
+      'ORDERLY DALE: "CODE GRAY! I NEED HANDS!" TWO MORE ORDERLIES APPEAR OUT OF NOWHERE. YOU ALWAYS SUSPECTED THEY COULD DO THAT.',
+      'A NURSE: "HALOPERIDOL, FIVE MILLIGRAMS. LITTLE PINCH, MALPHAS."'], () => {
+      SFX.play('hurt');
+      SFX.music(null);
+      fadeOut(() => { state = 'sleep'; sleep = { t: 0 }; });
+    });
+  }
+  function updSleep() {
+    if (++sleep.t >= 240 || (sleep.t > 60 && I.pressed('a'))) { sleep.t = -1e9; fadeOut(wake); }
+  }
+  function drawSleep() {
+    G.clear(3);
+    const t = Math.max(0, sleep.t);
+    ['Z', 'Z', 'Z'].forEach((z, i) => { if (t > 30 + i * 40) G.text(z, 64 + i * 14, 70 - i * 10 + Math.round(Math.sin(t / 20 + i)), 1, i + 1); });
+  }
+  function wake() {
+    WORLD.use('er');
+    g.floor = 'er';
+    Object.assign(P, { x: 27, y: 10, px: 27 * TS, py: 10 * TS, dir: 'up', moving: false });
+    g.san = g.sanMax;
+    g.min += 60;
+    state = 'world';
+    SFX.music(WORLD.MUSIC);
+    say(['YOU WAKE UP ON THE BREAK ROOM COUCH.',
+      'YOUR LAB COAT IS ON. YOUR BADGE SAYS "DR. MALPHAS." YOUR PAGER IS GOING OFF.',
+      "THERE IS A SMALL BANDAGE ON YOUR ARM, AND SOME PUDDING ON YOUR SLEEVE. YOU DON'T REMEMBER WHY.",
+      'EVERYTHING FEELS VERY CALM. AND VERY FLAT. (SANITY FULLY RESTORED.)']);
   }
   const ARRIVALS = {
     er: 'DING. EMERGENCY DEPARTMENT. THE NOISE HITS YOU LIKE A WALL.',
     or: ['DING. SURGICAL FLOOR.', 'IT IS VERY QUIET UP HERE. EXCEPT FOR THE ALARMS. NOBODY SEEMS TO HEAR THE ALARMS.'],
     mo: ['DING. BASEMENT. MORGUE.', 'IT IS COLD AND COMPLETELY SILENT. NOBODY DOWN HERE WANTS ANYTHING FROM YOU.'],
+    ps: ['DING. 3F. THE DOORS OPEN ONTO A WARM, QUIET HALLWAY THAT SMELLS LIKE PUDDING.', 'YOU FEEL A LITTLE STRANGE.'],
   };
 
   // Dr. Ether's residency pitch. Turning it down is good for you, once a night.
@@ -286,6 +389,7 @@
   function updWorld() {
     if (dlg) return updDialog();
     if (menu) return updMenu();
+    if (cut) return updCut();
     if (P.moving) {
       const [dx, dy] = DIRS[P.dir];
       P.px += dx * 2; P.py += dy * 2;
@@ -382,9 +486,10 @@
   function drawMenu() {
     if (menu.sub === 'status') {
       G.box(0, 0, 160, 144);
-      G.draw(SPR.docDown[0], 136, 8);
+      const ps = WORLD.id === 'ps';
+      G.draw(SPR.outfits[ps ? 'psych' : 'doc'].down[0], 136, 8);
       [
-        'DR. MALPHAS, M.D.', 'DEMON. NIGHT SHIFT.', '',
+        ps ? 'MALPHAS, ROOM 3' : 'DR. MALPHAS, M.D.', ps ? 'BELIEVES: ER DOCTOR' : 'DEMON. NIGHT SHIFT.', '',
         `BURNOUT LV   ${g.lv}`, `BURNOUT PTS  ${g.xp}/${g.next}`, `SANITY       ${g.san}/${g.sanMax}`,
         `SELF-RESPECT ${g.rsp}/${g.rspMax}`, `NIGHT        ${g.night}`, `PATIENTS     ${g.seen}`, `WAITING      ${g.waiting.length}`,
         `CLOCK        ${g.clockStr()}`, `SHIFT #${fmt(shiftNo)}`,
@@ -419,12 +524,13 @@
   function drawPlayer(cx, cy) {
     const rem = Math.abs(P.px - P.x * TS) + Math.abs(P.py - P.y * TS);
     const walking = P.moving && rem > 3 && rem <= 12;
+    const O = SPR.outfits[WORLD.id === 'ps' ? 'psych' : 'doc']; // on 3F you are in pajamas
     let s, flip = false;
     if (P.dir === 'down' || P.dir === 'up') {
-      s = (P.dir === 'down' ? SPR.docDown : SPR.docUp)[walking ? 1 : 0];
+      s = O[P.dir][walking ? 1 : 0];
       flip = walking && P.steps % 2 === 1;
     } else {
-      s = SPR.docSide[walking ? 1 : 0];
+      s = O.side[walking ? 1 : 0];
       flip = P.dir === 'left';
     }
     G.draw(s, P.px - cx, P.py - cy - 3 - (walking ? 1 : 0), flip);
@@ -441,8 +547,9 @@
     drawPlayer(cx, cy);
     G.rect(0, 0, 160, 9, 3);
     const lie = G.weird > 0.5 && Math.sin(G.frame / 41) > 0.96; // the clock briefly says something it shouldn't
-    G.text(`${lie ? '3:33 AM' : g.clockStr()} N${g.night}`, 2, 1, 0);
-    const st = `SAN ${g.san} RSP ${g.rsp}`;
+    const ps = WORLD.id === 'ps';
+    G.text(ps ? 'UNIT 3F' : `${lie ? '3:33 AM' : g.clockStr()} N${g.night}`, 2, 1, 0);
+    const st = ps ? 'PT: MALPHAS' : `SAN ${g.san} RSP ${g.rsp}`;
     G.text(st, 158 - G.textW(st), 1, g.san < 10 || g.rsp < 8 ? 1 : 0);
     if (menu) drawMenu();
     if (dlg) TB.draw(dlg.tb);
@@ -510,7 +617,7 @@
   function tick() {
     G.frame++;
     // Reality starts to slip below 65% sanity and is fully gone around 10%.
-    const lost = P && ['world', 'trans', 'battle'].includes(state) ? 1 - g.san / g.sanMax : 0;
+    const lost = P && ['world', 'trans', 'battle'].includes(state) && WORLD.id !== 'ps' ? 1 - g.san / g.sanMax : 0; // 3F is eerily stable
     G.weird = Math.max(0, Math.min(1, (lost - 0.35) / 0.55));
     G.tickWeird();
     SFX.setWeird(G.weird);
@@ -520,6 +627,7 @@
     else if (state === 'trans') updTrans();
     else if (state === 'battle') BATTLE.update(I);
     else if (state === 'gameover') updOver();
+    else if (state === 'sleep') updSleep();
     I.hit = {};
   }
   function draw() {
@@ -527,6 +635,7 @@
     else if (state === 'world' || state === 'trans') drawWorld();
     else if (state === 'battle') BATTLE.draw();
     else if (state === 'gameover') drawOver();
+    else if (state === 'sleep') drawSleep();
     G.post();
   }
 
@@ -559,6 +668,7 @@
         .map((w) => { const p = make(w.spec); if (p) p.seat = w.seat; return p; }).filter(Boolean),
     });
     WORLD.use(g.floor || 'er');
+    if (g.psychMet) Object.assign(WORLD.npcById('orderly'), { x: 2, y: 2 }); // the orderly already came to get you
     Object.assign(P, d.P, { px: d.P.x * TS, py: d.P.y * TS, moving: false });
     state = 'world';
   }

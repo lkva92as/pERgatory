@@ -71,6 +71,61 @@
     spr([...docSideTop, '....33....33....']),
   ];
 
+  // The same body in striped pajamas: the lab coat becomes stripes and the tie disappears.
+  // (The tail, at the far left of the side view, is left alone.)
+  function pajamas(s) {
+    const d = new Uint8Array(s.data);
+    for (let y = 10; y < s.h; y++) {
+      for (let x = 3; x < s.w; x++) {
+        const v = d[y * s.w + x];
+        if (v === 0 || v === 2) d[y * s.w + x] = v === 2 ? 0 : (y % 2 ? 0 : 1);
+      }
+    }
+    return G.mkSprite(s.w, s.h, d);
+  }
+  S.outfits = {
+    doc: { down: S.docDown, up: S.docUp, side: S.docSide },
+    psych: { down: S.docDown.map(pajamas), up: S.docUp.map(pajamas), side: S.docSide.map(pajamas) },
+  };
+
+  // Psych ward staff
+  S.orderly = spr([
+    '................',
+    '.....333333.....',
+    '....33333333....',
+    '...3333333333...',
+    '...3311111133...',
+    '...3131111313...',
+    '...3111111113...',
+    '...3111331113...',
+    '....31111113....',
+    '...3322222233...',
+    '..322222222223..',
+    '..322222222223..',
+    '..312222222213..',
+    '..312222222213..',
+    '...3222222223...',
+    '....33....33....',
+  ]);
+  S.therapist = spr([
+    '................',
+    '.....333333.....',
+    '....33333333....',
+    '...3333333333...',
+    '...3311111133...',
+    '...3303003033...',
+    '...3111111113...',
+    '...3111331113...',
+    '....31111113....',
+    '...3322002233...',
+    '..322220022223..',
+    '..322220022223..',
+    '..312220022213..',
+    '..312220022213..',
+    '...3222002223...',
+    '....33....33....',
+  ]);
+
   // ---------- NPCs ----------
   S.nurse = spr([
     '.....333333.....',

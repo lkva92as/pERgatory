@@ -48,7 +48,22 @@
     '#~~~~~~~~~~~~~~~~#',
     '##################',
   ];
-  [ER, OR, MORGUE].forEach((m) => m.forEach((r, i) => { if (r.length !== m[0].length) console.warn('map row', i, 'len', r.length); }));
+  // Psych ward (3F): patient rooms along the back wall, nurses' station, TV corner, a checkers table,
+  // a ring of chairs for group, and locked unit doors.
+  const PSYCH = [
+    '######################',
+    '#Ld#d#d###W####d#d#d##',
+    '#gggggggggggggggggggg#',
+    '#gggggggggggggggggggg#',
+    '#ggggggggGGGGgggggggg#',
+    '#ggggggkggggggghghggg#',
+    '#ggtgggggggggghggghgg#',
+    '#gggggggggggggghghggg#',
+    '#ghhhgggggggggggggggg#',
+    '#gggggggggggggggggggg#',
+    '##########UU##########',
+  ];
+  [ER, OR, MORGUE, PSYCH].forEach((m) => m.forEach((r, i) => { if (r.length !== m[0].length) console.warn('map row', i, 'len', r.length); }));
 
   W.START = { x: 16, y: 7, dir: 'down' };
   const ER_BAYS = [
@@ -57,9 +72,9 @@
   ];
 
   W.tile = (x, y) => (x < 0 || y < 0 || x >= W.w || y >= W.h) ? '#' : W.MAP[y][x];
-  const WALLISH = '#wCBELY';
+  const WALLISH = '#wCBELYWd';
   const isWall = (ch) => WALLISH.includes(ch);
-  W.solid = (x, y) => !',.:;_~'.includes(W.tile(x, y));
+  W.solid = (x, y) => !',.:;_~g'.includes(W.tile(x, y));
   W.isCounter = (ch) => ch === 'T' || ch === 'N' || ch === 'X';
   // Random encounters happen on public floors, never in the break room.
   W.encounterZone = (x, y) => {
@@ -171,12 +186,37 @@
     p.line(11, 11, 12, 13, 3).rect(11, 13, 4, 3, 0).set(13, 14, 3);  // toe tag
   });
 
+  // Psych ward
+  t.psychFloor = T(null, (p) => { p.fill(0).line(0, 15, 15, 15, 1).set(3, 4, 1).set(10, 2, 1).set(6, 11, 1).set(13, 9, 1); });
+  t.pchair = T(t.psychFloor, (p) => {
+    p.rect(2, 1, 12, 7, 3).rect(3, 2, 10, 5, 1).rect(2, 8, 12, 5, 3).rect(3, 8, 10, 4, 2);
+    p.rect(3, 13, 1, 3, 3).rect(12, 13, 1, 3, 3);
+  });
+  t.tv = T(t.psychFloor, (p) => {
+    p.rect(1, 1, 14, 10, 3).rect(2, 2, 12, 8, 2);
+    p.rect(6, 4, 4, 4, 0).set(5, 3, 0).set(10, 3, 0).set(7, 5, 3).set(8, 5, 3); // a little horned figure on screen
+    p.rect(6, 11, 4, 2, 3).rect(3, 13, 10, 2, 3);
+  });
+  t.checkers = T(t.psychFloor, (p) => {
+    p.rect(1, 3, 14, 10, 3).rect(2, 4, 12, 8, 0);
+    for (let j = 0; j < 4; j++) for (let i = 0; i < 6; i++) if ((i + j) % 2) p.rect(2 + i * 2, 4 + j * 2, 2, 2, 1);
+    p.set(4, 5, 3).set(8, 7, 3).set(10, 9, 2).set(6, 9, 2);
+  });
+  t.station = T(t.psychFloor, (p) => {
+    p.rect(0, 1, 16, 1, 3).rect(0, 2, 16, 6, 0).line(3, 6, 6, 3, 1).line(9, 6, 11, 4, 1);
+    p.rect(0, 8, 16, 7, 2).rect(0, 15, 16, 1, 3);
+  });
+  t.whiteboard = T(t.wallFace, (p) => { p.rect(1, 1, 14, 10, 3).rect(2, 2, 12, 8, 0).line(3, 4, 9, 4, 2).line(3, 6, 11, 6, 2).line(3, 8, 7, 8, 2); });
+  t.roomDoor = T(t.wallFace, (p) => { p.rect(3, 1, 10, 12, 3).rect(4, 2, 8, 11, 1).rect(6, 4, 4, 3, 0).set(10, 8, 3); });
+  t.unitDoor = T(t.door, (p) => { p.rect(6, 6, 4, 4, 3).rect(7, 7, 2, 2, 0); }); // locked
+
   const CH = {
     '.': 'floor', ',': 'carpet', ':': 'brk', c: 'chair', T: 'triage', N: 'counter', X: 'computer',
     b: 'bed', u: 'curtain', D: 'door', P: 'plant', K: 'coffee', V: 'vend', S: 'couch', R: 'rack',
     w: 'window', C: 'clock', B: 'board', E: 'exit', L: 'elevator',
     ';': 'orFloor', _: 'floor', O: 'tableHead', Q: 'tableFoot',
     '~': 'morgueFloor', Y: 'drawers', Z: 'bodyHead', z: 'bodyFoot', e: 'steelHead', f: 'steelFoot',
+    g: 'psychFloor', h: 'pchair', t: 'tv', k: 'checkers', G: 'station', W: 'whiteboard', d: 'roomDoor', U: 'unitDoor',
   };
 
   function tileSprite(x, y) {
@@ -274,6 +314,42 @@
     ] },
   ];
 
+  // Upstairs on 3F, everyone already knows you. Patients use the overworld patient sprite via `look`.
+  const PSYCH_NPCS = [
+    { id: 'orderly', x: 10, y: 3, spr: 'orderly', name: 'ORDERLY DALE', lines: [
+      "I'VE GOT MY EYE ON YOU, MALPHAS.",
+      "NO, YOU CAN'T BORROW A STETHOSCOPE. I DON'T HAVE ONE. NEITHER DO YOU.",
+      "GROUP'S IN THE CIRCLE. DR. OKAFOR IS WAITING.",
+    ] },
+    { id: 'okafor', x: 16, y: 5, spr: 'therapist', name: 'DR. OKAFOR (THERAPIST)', group: true, lines: [
+      'IT WAS GOOD TO HEAR FROM YOU IN GROUP, MALPHAS. EVEN THE PART ABOUT THE SANDWICHES.',
+      'SAME TIME TOMORROW. IT IS ALWAYS THE SAME TIME TOMORROW.',
+    ] },
+    { x: 3, y: 8, look: { skin: 1 }, name: 'WALT', lines: [
+      "SHH. MY SHOW'S ON. IT'S THE ONE ABOUT THE DEMON DOCTOR. YOU LOVE THIS ONE.",
+      "THEY'VE BEEN SHOWING THIS EPISODE FOR WEEKS. THE NIGHT SHIFT NEVER ENDS. GREAT SHOW.",
+      'YOU ALWAYS SAY THE DOCTOR IS YOU. I ALWAYS SAY YOU HAVE BETTER HAIR.',
+    ] },
+    { x: 8, y: 7, look: { skin: 2, hair: 'bonnet' }, name: 'DOLORES', lines: [
+      "HELLO, DEAR. IT'S TUESDAY. IT'S BEEN TUESDAY FOR A WHILE NOW.",
+      "I'M KNITTING YOU A SCARF. IT'S RED. YOU SAID YOU LIKE RED. YOU SAID IT REMINDS YOU OF HOME.",
+      'YOU WERE GONE ALL NIGHT AGAIN. YOU ALWAYS COME BACK TALKING ABOUT SANDWICHES.',
+    ] },
+    { x: 6, y: 5, look: { skin: 'mid' }, name: 'GUS', lines: [
+      "WANT TO PLAY CHECKERS? I'LL GO EASY ON YOU. I WON'T, BUT I'LL SAY I WILL.",
+      "YOU KNOW YOUR PROBLEM, DOC? YOU THINK EVERYONE NEEDS YOU. NOBODY NEEDS ANYBODY UP HERE. IT'S GREAT.",
+      'THEY CALL YOU DOC BECAUSE YOU KEEP TRYING TO TAKE EVERYBODY\'S PULSE.',
+    ] },
+    { x: 14, y: 6, look: { skin: 'mid' }, name: 'PRIYA', lines: [
+      "I'M NOT TALKING UNTIL GROUP. I'M SAVING IT. IT'S A GOOD ONE THIS WEEK.",
+      'YOU SAID THE ER HAS A VENDING MACHINE THAT EATS SOULS. HONESTLY, SO DOES OURS.',
+    ] },
+    { x: 18, y: 6, look: { skin: 2 }, name: 'LEON', lines: [
+      "LAST WEEK YOU TOLD GROUP YOU'VE WORKED THE SAME NIGHT SHIFT FOR 500 YEARS. HONESTLY? RELATABLE.",
+      "IF YOU EVER DO GET OUT OF THAT ER OF YOURS, SAY HI TO NURSE BEV FOR ME. YOU TALK ABOUT HER A LOT.",
+    ] },
+  ];
+
   // The skeleton keeps its own chair; every other waiting-room chair is a seat.
   const seatsOf = (rows, npcs) => {
     const s = [];
@@ -284,8 +360,15 @@
     er: { rows: ER, npcs: ER_NPCS, bays: ER_BAYS, arrive: { x: 16, y: 2, dir: 'down' }, music: 'world' },
     or: { rows: OR, npcs: OR_NPCS, bays: [], arrive: { x: 1, y: 7, dir: 'down' }, music: 'title' },
     mo: { rows: MORGUE, npcs: MORGUE_NPCS, bays: [], arrive: { x: 8, y: 2, dir: 'down' }, music: null }, // silence
+    ps: { rows: PSYCH, npcs: PSYCH_NPCS, bays: [], arrive: { x: 1, y: 2, dir: 'down' }, music: 'title' },
   };
-  Object.values(MAPS).forEach((m) => { m.seats = seatsOf(m.rows, m.npcs); m.npcs.forEach((n) => { n.i = 0; n.dir = 'down'; }); });
+  Object.values(MAPS).forEach((m) => {
+    m.seats = seatsOf(m.rows, m.npcs);
+    m.npcs.forEach((n) => { n.i = 0; n.dir = 'down'; n.hx = n.x; n.hy = n.y; n.ox = 0; n.oy = 0; });
+  });
+  // Put every NPC back where the shift found them.
+  W.resetNpcs = () => Object.values(MAPS).forEach((m) => m.npcs.forEach((n) => Object.assign(n, { x: n.hx, y: n.hy, ox: 0, oy: 0, i: 0 })));
+  W.npcById = (id) => PSYCH_NPCS.find((n) => n.id === id);
   W.ER_SEATS = MAPS.er.seats; // the waiting room is downstairs whichever floor you're on
 
   // Switch floors. Everything else reads the current floor through these fields.
@@ -326,6 +409,17 @@
   // Returns dialog lines; may mutate game state g. (x, y) is the tile being poked.
   W.interact = (ch, g, x) => {
     switch (ch) {
+      case 't': return ['THE TV IS SHOWING A SHOW ABOUT A DEMON WHO WORKS NIGHTS IN AN ER. THE DEMON LOOKS EXACTLY LIKE YOU. THE LAUGH TRACK IS VERY LOUD.'];
+      case 'k': return ['A CHECKERS GAME IN PROGRESS. GUS IS WINNING. GUS HAS BEEN WINNING SINCE 1991.'];
+      case 'G': return ['THE NURSES\' STATION. ON THE WHITEBOARD BEHIND THE GLASS: "RM 3 - MALPHAS - BELIEVES IT IS 3 AM. (IT IS NOT 3 AM.)"'];
+      case 'W': return ['TODAY: GROUP. ART THERAPY. PUDDING. AT THE BOTTOM, CIRCLED: "KEEP MALPHAS AWAY FROM THE LAB COATS IN THE LAUNDRY."'];
+      case 'h': return ['A PLASTIC CHAIR, BOLTED TO THE FLOOR. IT IS SOMEHOW MORE COMFORTABLE THAN ANYTHING IN THE ER.'];
+      case 'U': return ['THE UNIT DOORS ARE LOCKED. A SIGN: "ELOPEMENT RISK. CHECK WRISTBANDS."', 'YOU LOOK AT YOUR WRISTBAND. IT SAYS "MALPHAS."'];
+      case 'd': {
+        const room = [2, 4, 6, 15, 17, 19].indexOf(x) + 1;
+        if (room === 3) return ['ROOM 3: MALPHAS. INSIDE: A NEATLY MADE BED, A CRAYON DRAWING OF AN EMERGENCY ROOM, AND A NAME BADGE MADE OF CONSTRUCTION PAPER.'];
+        return [`ROOM ${room}. SOMEONE INSIDE IS SNORING PEACEFULLY. NOBODY IS PAGING THEM.`];
+      }
       case 'Z': case 'z': return [STARES[g.stares++ % STARES.length]];
       case 'e': case 'f':
         if (g.morgueRest) return ['YOU LIE DOWN AGAIN. THE PAGER GOES OFF BEFORE YOUR HEAD TOUCHES THE STEEL.'];
@@ -396,8 +490,9 @@
   W.drawNPCs = (camX, camY) => {
     for (const n of W.NPCS) {
       const bob = n.spr === 'ghost' ? Math.round(Math.sin(G.frame / 20 + n.x)) : 0;
-      const seen = G.weird > 0.6 && ((G.frame >> 5) + n.x * 3) % 13 === 0 ? 'skeleton' : n.spr; // hallucinations
-      G.draw(SPR[seen], n.x * TS - camX, n.y * TS - camY - 2 + bob);
+      const seen = G.weird > 0.6 && ((G.frame >> 5) + n.x * 3) % 13 === 0 ? SPR.skeleton // hallucinations
+        : n.look ? SPR.ow(n.look) : SPR[n.spr];
+      G.draw(seen, n.x * TS + n.ox - camX, n.y * TS + n.oy - camY - 2 + bob);
     }
   };
   W.drawWaiting = (waiting, camX, camY) => {
