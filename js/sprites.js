@@ -342,9 +342,17 @@
     const SK = L.skin === 'mid' ? MID : L.skin, FC = SK === 1 ? 2 : 3; // FC: nose/shadow color that reads on this skin
 
     if (L.hair === 'long') p.ellipse(cx, cy + 6, rx + 3, ry + 5, L.hairC);
-    p.ellipse(cx, 52, 21, 14, 0);                                       // gown
-    for (let y = 40; y < 48; y += 4) for (let x = 6 + (y % 8 ? 2 : 0); x < 44; x += 5) p.set(x, y, 2);
-    p.line(cx - 4, 38, cx, 42, 2).line(cx + 4, 38, cx, 42, 2);          // neckline
+    if (L.outfit === 'suit') {                                          // administrators
+      p.ellipse(cx, 52, 21, 14, 3);                                     // blazer
+      p.rect(cx - 5, 38, 11, 10, 0);                                    // shirt
+      p.line(cx - 6, 38, cx - 1, 47, 2).line(cx + 6, 38, cx + 1, 47, 2); // lapels
+      p.rect(cx - 1, 39, 2, 9, 2);                                      // tie
+      p.line(cx - 9, 39, cx - 9, 44, 1).rect(cx - 11, 44, 4, 3, 0);     // lanyard and badge
+    } else {
+      p.ellipse(cx, 52, 21, 14, 0);                                     // gown
+      for (let y = 40; y < 48; y += 4) for (let x = 6 + (y % 8 ? 2 : 0); x < 44; x += 5) p.set(x, y, 2);
+      p.line(cx - 4, 38, cx, 42, 2).line(cx + 4, 38, cx, 42, 2);        // neckline
+    }
     p.rect(cx - 4, 31, 8, 7, SK);                                   // neck
     p.ellipse(cx - rx, cy + 1, 2, 3, SK).ellipse(cx + rx, cy + 1, 2, 3, SK); // ears
     p.ellipse(cx, cy, rx, ry, SK);                                  // head
@@ -413,6 +421,10 @@
     if (L.prop === 'cane') p.line(hx + 4, hy + 8, hx + 4, hy - 12, 2).line(hx + 4, hy - 12, hx + 1, hy - 14, 2);
     if (L.prop === 'bag') { p.rect(hx - 3, hy - 9, 12, 9, 2).line(hx - 1, hy - 9, hx + 1, hy - 13, 3).line(hx + 1, hy - 13, hx + 5, hy - 13, 3).line(hx + 5, hy - 13, hx + 7, hy - 9, 3); }
     if (L.prop === 'tissues') { p.ellipse(hx + 2, hy - 6, 5, 4, 0).line(hx, hy - 7, hx + 3, hy - 5, 1).line(hx + 2, hy - 9, hx + 5, hy - 7, 1); }
+    if (L.prop === 'tablet') { // a dashboard, bars going up
+      p.rect(hx - 3, hy - 15, 12, 14, 3).rect(hx - 2, hy - 14, 10, 11, 0);
+      p.rect(hx - 1, hy - 6, 2, 3, 2).rect(hx + 2, hy - 8, 2, 5, 2).rect(hx + 5, hy - 11, 2, 8, 1);
+    }
     if (L.prop) p.ellipse(hx + 1, hy, 4, 3, SK);
 
     p.outline(3);

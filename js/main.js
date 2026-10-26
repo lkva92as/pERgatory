@@ -68,6 +68,7 @@
       waiting: [], drawn: [], met: {}, // waiting room queue; cases seen this shift; visits per regular this shift
       quota: 1, spawned: 0, doneNight: 0, // night N brings N patients: how many, how many have arrived, how many are done
       offShift: false, // tonight's patients are done and the front doors are open
+      adminNight: 0, adminCount: 0, // the night of the last admin meeting; how many meetings so far
       bayClean: [0, 0, 0, 0, 0, 0], // steps until a just-cleared bay can take a new patient
       floor: 'er', orFix: {}, pitched: 0, // which floor; OR patients you've rescued; night you last turned down Dr. Ether
       morgueRest: false, stares: 0, // lay on the morgue's empty table since the last patient; bodies stared at
@@ -94,7 +95,7 @@
   const DIRS = { up: [0, -1], down: [0, 1], left: [-1, 0], right: [1, 0] };
   let g = newGame(), P = null, state = 'title', dlg = null, menu = null, trans = null, fade = null, over = null;
   let stepsSince = 0, bumpT = 0;
-  let cut = null, sleep = null; // an NPC walking on its own; the blackout screen
+  let cut = null, sleep = null, pwalk = null; // an NPC walking on its own; the blackout screen; the player walking on their own
 
   function reset() {
     g = newGame();
@@ -260,7 +261,20 @@
       'YOUR RELIEF HAS ARRIVED: A COAT RACK SOMEONE PUT A LAB COAT ON. IT WILL HAVE TO DO.',
       'YOUR SHIFT IS OVER. YOU CAN GO HOME. THE FRONT DOORS ARE OPEN.']);
   }
+  // Administrators catch you on the way out after nights 2, 4, 7, 11, 16, ...: the gap grows by one
+  // each time, so meetings stay rare as nights get longer.
+  function adminNight(n) {
+    for (let k = 1, a = 2; a <= n; k++, a += k) if (a === n) return true;
+    return false;
+  }
+  const adminDue = () => adminNight(g.night) && g.adminNight !== g.night;
+  function adminAmbush() {
+    const a = ADMINS[g.adminCount % ADMINS.length];
+    encounter(a, 'BEFORE YOU REACH THE DOORS, SOMEONE STEPS IN FRONT OF THEM. SOMEONE IN BUSINESS CASUAL.', { admin: true });
+  }
+
   function leave() {
+    if (adminDue()) return adminAmbush();
     SFX.play('door');
     fadeOut(() => {
       state = 'outside';
@@ -280,23 +294,27 @@
     out.y += 0.5;
     if (out.y >= 84) comeBackIn();
   }
-  // No fade: one step past the car, you're walking in through the front doors.
+  // No fade: one step past the car, you're walking in through the front doors. You see yourself
+  // come through them first; the doors shut behind you; then the narration.
   function comeBackIn() {
     out = null;
     const n = g.night + 1;
     g.night = n;
-    g.offShift = false;
     startNight();
     WORLD.use('er');
     g.floor = 'er';
-    Object.assign(P, { x: 5, y: 13, px: 5 * TS, py: 13 * TS, dir: 'up', moving: false });
+    Object.assign(P, { x: 5, y: 14, px: 5 * TS, py: 14 * TS, dir: 'up', moving: false });
     stepsSince = 0;
     state = 'world';
     SFX.play('door');
     SFX.music(WORLD.MUSIC);
-    say(['...THE FRONT DOORS OF PURGATORY GENERAL HOSPITAL. THEY SLIDE SHUT BEHIND YOU.',
-      "THE CLOCK SAYS 6:59 PM. THEN 7:00 PM. YOU'RE RIGHT ON TIME FOR YOUR SHIFT.",
-      `NURSE BEV (FROM THE DESK): "RIGHT ON TIME, DOC. NIGHT ${n}. ${n} PATIENTS TONIGHT." ${MOODS[CLINIC.level(n)]}`]);
+    pwalk = { n: 2, cb: () => {
+      g.offShift = false;
+      SFX.play('door');
+      say(['...THE FRONT DOORS OF PURGATORY GENERAL HOSPITAL. THEY SLIDE SHUT BEHIND YOU.',
+        "THE CLOCK SAYS 6:59 PM. THEN 7:00 PM. YOU'RE RIGHT ON TIME FOR YOUR SHIFT.",
+        `NURSE BEV (FROM THE DESK): "RIGHT ON TIME, DOC. NIGHT ${n}. ${n} PATIENTS TONIGHT." ${MOODS[CLINIC.level(n)]}`]);
+    } };
   }
   function drawOutside() {
     const t = out.t;
@@ -322,6 +340,9 @@
     if (!npc && WORLD.isCounter(ch)) npc = WORLD.npcAt(fx + dx, fy + dy);
     if (npc && npc.pitch) return pitch(npc);
     if (npc && npc.group && g.psychGroupAt < 0) return groupTherapy();
+    if (npc && g.offShift && npc.name === 'NURSE BEV' && adminDue()) {
+      return say("NURSE BEV:\nHEADS UP, DOC. SOMEONE IN A BLAZER HAS BEEN LURKING BY THE FRONT DOORS. I DIDN'T SEE ANYTHING.");
+    }
     if (npc && g.offShift && OFF_SHIFT[npc.name]) return say(`${npc.name}:\n${OFF_SHIFT[npc.name]}`);
     if (npc && npc.name === 'NURSE BEV' && g.psychDone && !g.bevPsych) {
       g.bevPsych = true;
@@ -475,11 +496,17 @@
     if (dlg) return updDialog();
     if (menu) return updMenu();
     if (cut) return updCut();
+    if (pwalk && !P.moving) { // the player walking on their own, one tile at a time
+      if (pwalk.n-- <= 0) { const cb = pwalk.cb; pwalk = null; return cb(); }
+      const [dx, dy] = DIRS[P.dir];
+      P.x += dx; P.y += dy; P.moving = true; P.steps++;
+    }
     if (P.moving) {
       const [dx, dy] = DIRS[P.dir];
       P.px += dx * 2; P.py += dy * 2;
       if (P.px !== P.x * TS || P.py !== P.y * TS) return;
       P.moving = false;
+      if (pwalk) return;
       onStep();
       if (dlg || state !== 'world') return;
     }
@@ -510,6 +537,15 @@
   }
   function battleOver(r, from) {
     if (r === 'lose') return fadeOut(() => { state = 'gameover'; over = { t: 0 }; });
+    if (from.admin) { // back by the open doors; the walk home is still on
+      g.adminNight = g.night;
+      g.adminCount++;
+      return fadeOut(() => {
+        state = 'world';
+        SFX.music(WORLD.MUSIC);
+        say(['THE MEETING IS ADJOURNED. NOBODY KNOWS WHAT WAS DECIDED.', 'THE FRONT DOORS ARE STILL OPEN.']);
+      });
+    }
     if (from.bay >= 0) { g.bays[from.bay] = null; g.bayClean[from.bay] = 30; }
     if (from.wait) leaveWaiting(from.wait);
     if (r === 'win') {
@@ -641,12 +677,15 @@
     const st = ps ? 'PT: MALPHAS' : `SAN ${g.san} RSP ${g.rsp}`;
     G.text(st, 158 - G.textW(st), 1, g.san < 10 || g.rsp < 8 ? 1 : 0);
     if (menu) drawMenu();
-    if (dlg) TB.draw(dlg.tb);
+    // Text goes to the top of the screen when the player is low enough that the box would cover them.
+    const top = P.py - cy > 76, boxY = top ? 10 : 96;
+    if (dlg) TB.draw(dlg.tb, boxY);
     if (dlg && dlg.choice && TB.done(dlg.tb)) {
       const o = dlg.choice.opts, w = 6 * Math.max(...o.map((s) => s.length)) + 22, h = o.length * 10 + 12;
-      G.box(160 - w, 96 - h, w, h);
-      o.forEach((s, i) => G.text(s, 160 - w + 15, 96 - h + 7 + i * 10));
-      G.text('▶', 160 - w + 7, 96 - h + 7 + dlg.choice.i * 10);
+      const y = top ? 58 : 96 - h;
+      G.box(160 - w, y, w, h);
+      o.forEach((s, i) => G.text(s, 160 - w + 15, y + 7 + i * 10));
+      G.text('▶', 160 - w + 7, y + 7 + dlg.choice.i * 10);
     }
     if (trans && trans.t >= 24) {
       const w = Math.round(160 * Math.min(1, (trans.t - 24) / 32));

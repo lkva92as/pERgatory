@@ -113,6 +113,10 @@
       bass: [45, 57, 45, 57, 45, 57, 45, 57, 41, 53, 41, 53, 40, 52, 40, 52,
              45, 57, 45, 57, 43, 55, 43, 55, 41, 53, 41, 53, 40, 52, 44, 56] },
   };
+  // Administrators get an upbeat corporate jingle. It does not help.
+  TRACKS.admin = { bpm: 132,
+    lead: [72, 0, 76, 79, 84, 0, 79, 76, 77, 0, 81, 84, 89, 0, 84, 81, 79, 0, 83, 86, 91, 0, 86, 83, 84, 83, 81, 79, 77, 76, 74, 72],
+    bass: [48, 0, 55, 0, 48, 0, 55, 0, 53, 0, 60, 0, 53, 0, 60, 0, 55, 0, 62, 0, 55, 0, 62, 0, 48, 0, 55, 0, 43, 0, 47, 0] };
   let cur = null, step = 0, nextT = 0, timer = null;
 
   // As sanity drains (weird -> 1) the music drifts out of tune, sways in tempo, hits wrong notes,

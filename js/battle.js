@@ -25,12 +25,13 @@
     return false;
   };
   TB.done = (tb) => tb.page === tb.pages.length - 1 && tb.shown >= pageText(tb).length;
-  TB.draw = (tb) => {
-    G.box(0, 96, 160, 48);
+  // y is the box's top edge: the bottom of the screen by default.
+  TB.draw = (tb, y = 96) => {
+    G.box(0, y, 160, 48);
     if (!tb) return;
     const full = pageText(tb);
-    G.text(full.slice(0, tb.shown), 8, 104, 3);
-    if (tb.shown >= full.length && (G.frame >> 4) % 2 === 0) G.text('▼', 147, 133, 3);
+    G.text(full.slice(0, tb.shown), 8, y + 8, 3);
+    if (tb.shown >= full.length && (G.frame >> 4) % 2 === 0) G.text('▼', 147, y + 37, 3);
   };
 
   // ---------- battle ----------
@@ -57,11 +58,11 @@
       menu: 0, mv: 0, it: 0, calm: false, line: 0, loud: 0, charted: false,
       blink: 0, shake: 0, faint: 0, slide: 0,
     };
-    SFX.music('battle');
+    SFX.music(p.admin ? 'admin' : 'battle');
     push({ k: 'slide' });
     if (where) say(where);
     say(visit > 1 && p.back ? p.back.replace('{N}', visit) : p.intro);
-    say(`${p.name}!\nCHIEF COMPLAINT: ${p.cc}`);
+    say(`${p.name}!\n${p.ccLabel || 'CHIEF COMPLAINT'}: ${p.cc}`);
     push({ k: 'menu' });
   };
 
@@ -110,7 +111,7 @@
     push({ k: 'faint' });
     sfx('win');
     say(p.win);
-    say(`PATIENT DISCHARGED!\n+${xp} BURNOUT POINTS.`);
+    say(`${p.winLabel || 'PATIENT DISCHARGED!'}\n+${xp} BURNOUT POINTS.`);
     const msgs = g.gainXp(xp);
     if (msgs.length) sfx('levelup');
     msgs.forEach(say);
@@ -202,8 +203,8 @@
   function discharge() {
     const p = s.p;
     s.mode = 'busy';
-    say(`YOU TRY TO DISCHARGE ${p.short}...`);
-    if (p.noRun) { say(`${p.short} REFUSES. ${p.short} LIVES HERE NOW.`); return endOrMenu(true); }
+    if (!p.admin) say(`YOU TRY TO DISCHARGE ${p.short}...`); // admins have their own line about leaving the meeting
+    if (p.noRun) { say(p.stay || `${p.short} REFUSES. ${p.short} LIVES HERE NOW.`); return endOrMenu(true); }
     if (Math.random() < 0.35 + 0.55 * (1 - s.hp / s.hpMax)) {
       sfx('back');
       say(`${p.short} LEAVES AGAINST MEDICAL ADVICE. "YOU'LL HEAR FROM MY LAWYER."`);
