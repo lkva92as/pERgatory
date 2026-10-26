@@ -99,7 +99,7 @@
     say(a.t ? `${p.short}: "${a.t}"` : `${p.short} TAKES A DEEP BREATH AND STARTS AGAIN FROM THE TOP. LOUDER.`);
     hurtMe(a.s, Math.max(1, Math.round(n)));
     if (a.g && s.hp < s.hpMax && !lost()) {
-      s.hp = Math.min(s.hpMax, s.hp + a.g);
+      s.hp = Math.min(s.hpMax, s.hp + Math.round(a.g * (1 + 0.25 * (s.g.night - 1)))); // demands grow faster on later nights
       push({ k: 'bar', w: 'hp', to: s.hp });
       say(`${p.short}'S DEMANDS GREW!`);
     }

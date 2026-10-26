@@ -57,11 +57,22 @@
     : v && typeof v === 'object' ? Object.fromEntries(Object.entries(v).map(([k, x]) => [k, fill(x, name)]))
     : v;
 
+  // How absurd each case is: 1 is an ordinary bad night, 5 is unhinged. Later nights unlock higher levels.
+  const TIERS = {
+    1: 'steve wendy chad frank lonely lozenge fever hasty bigtoe tooth hangnail shoes insomnia',
+    2: 'iris opal sal ted sam painless dandruff lotion booger hiccup almost scratch apple roach denim stones lift ride early soup gargle bottle hamster disco buffet glued',
+    3: 'gary roz haircut pinky pulse whoop pebble puddle migraine salon socket nicked yoga warmice evidence hotel sibling foreman halves scooter pizzaroll lasik boots lobster',
+    4: 'nuggets gator laser psychic wallet lawsuit chicken mussel yacht combo sweetcorn banana turkey puppy rabbit redial gull gadget magpie facial delivery tinfoil',
+    5: 'toast carryon egg pants bulb shark movers swing',
+  };
+
   C.cases = () => {
     if (!C.byId) {
       C.byId = {};
       PATIENTS.forEach((p) => { p.regular = true; p.tid = p.id; p.spec = { tid: p.id }; C.byId[p.id] = p; });
       WALKINS.forEach((t) => { C.byId[t.id] = t; });
+      Object.entries(TIERS).forEach(([tier, ids]) => ids.split(' ').forEach((id) => { C.byId[id].tier = +tier; }));
+      Object.values(C.byId).forEach((c) => { if (!c.tier) console.warn('no tier for case', c.id); });
     }
     return C.byId;
   };
@@ -92,24 +103,25 @@
     return { tid, first: firstName(t.nick, bonnet), age: rnd(a, b), look };
   };
 
-  function shuffle(a) {
-    for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; }
-    return a;
-  }
-  // Every walk-in once per deck; regulars once, Frank twice (he's frequent).
-  function newDeck() {
-    const ids = WALKINS.map((t) => t.id).concat(PATIENTS.map((p) => p.id), ['frank']);
-    return shuffle(ids);
-  }
+  // The absurdity level a night draws from: night 1 is ordinary, night 7 on is unhinged.
+  C.level = (night) => [1, 2, 2, 3, 4, 4][night - 1] || 5;
 
-  // Draw the next patient. `present` lists regulars already in the building, who can't arrive twice.
+  // Draw the next patient: mostly from tonight's level, some from the two levels below, never above.
+  // Cases already in the building can't arrive twice, and nobody repeats this shift until their
+  // levels run dry, except Frank, who is frequent.
   C.draw = (g, present) => {
-    for (let tries = 0; tries < 100; tries++) {
-      if (!g.deck || !g.deck.length) g.deck = newDeck();
-      const tid = g.deck.pop();
-      if (C.cases()[tid].regular && present.includes(tid)) continue;
-      return C.make(C.roll(tid));
+    const lvl = C.level(g.night);
+    const weight = (c) => [6, 3, 1][lvl - c.tier] || 0;
+    const open = Object.values(C.cases()).filter((c) => weight(c) && !present.includes(c.id));
+    let pool = open.filter((c) => c.id === 'frank' || !g.drawn.includes(c.id));
+    if (!pool.length) {
+      g.drawn = g.drawn.filter((id) => !open.some((c) => c.id === id));
+      pool = open;
     }
-    return C.make(C.roll(pick(WALKINS).id));
+    if (!pool.length) return C.make(C.roll(pick(WALKINS).id));
+    let r = Math.random() * pool.reduce((a, c) => a + weight(c), 0), c = pool[0];
+    for (const x of pool) { r -= weight(x); if (r <= 0) { c = x; break; } }
+    g.drawn.push(c.id);
+    return C.make(C.roll(c.id));
   };
 })();

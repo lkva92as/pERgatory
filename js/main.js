@@ -65,7 +65,8 @@
       san: 40, sanMax: 40, rsp: 30, rspMax: 30, lv: 1, xp: 0, next: 30,
       items: Object.assign({}, START_ITEMS), night: 1, min: 0, seen: 0,
       coffeeReady: true, napReady: true, vendIn: 0, bays: [null, null, null, null, null, null], bayTimer: 0,
-      waiting: [], deck: null, met: {}, // waiting room queue; case deck; visits per regular this shift
+      waiting: [], drawn: [], met: {}, // waiting room queue; cases seen this shift; visits per regular this shift
+      quota: 1, spawned: 0, doneNight: 0, // night N brings N patients: how many, how many have arrived, how many are done
       bayClean: [0, 0, 0, 0, 0, 0], // steps until a just-cleared bay can take a new patient
       floor: 'er', orFix: {}, pitched: 0, // which floor; OR patients you've rescued; night you last turned down Dr. Ether
       morgueRest: false, stares: 0, // lay on the morgue's empty table since the last patient; bodies stared at
@@ -100,19 +101,32 @@
     const s = WORLD.START;
     P = { x: s.x, y: s.y, px: s.x * TS, py: s.y * TS, dir: s.dir, moving: false, steps: 0 };
     WORLD.resetNpcs();
-    arrive(5); roomNext(); roomNext();
+    startNight();
     stepsSince = 0;
   }
 
   // ---------- patient flow: arrivals sit in the waiting room; the nurse rooms them into empty bays ----------
   const present = () => g.bays.concat(g.waiting).filter(Boolean).map((p) => p.tid);
+  // Up to n arrivals, never more than tonight's total; returns how many came in.
   function arrive(n) {
+    n = Math.max(0, Math.min(n, g.quota - g.spawned));
     for (let i = 0; i < n; i++) {
       const p = CLINIC.draw(g, present()), used = g.waiting.map((w) => w.seat);
       p.seat = WORLD.ER_SEATS.findIndex((_, k) => !used.includes(k)); // -1: standing room only
       g.waiting.push(p);
+      g.spawned++;
     }
+    return n;
   }
+  // Night N has N patients. About half are there when it starts; the rest trickle in.
+  function startNight() {
+    Object.assign(g, { quota: g.night, spawned: 0, doneNight: 0, min: 0 });
+    arrive(Math.ceil(g.quota / 2));
+    roomNext(); roomNext();
+  }
+  // The clock creeps forward as you walk, but can't pass the point where the next patient is done.
+  const clockCap = () => 715 * (g.doneNight + 1) / g.quota;
+  const passTime = (m) => { g.min = Math.min(g.min + m, clockCap()); };
   function leaveWaiting(p) {
     g.waiting = g.waiting.filter((w) => w !== p);
     const stander = g.waiting.find((w) => w.seat < 0);
@@ -126,8 +140,11 @@
     g.bays[i] = leaveWaiting(g.waiting[0]);
     return i + 1;
   }
-  const flowMsg = (n, bay) => (n > 1 ? `THE DOORS SLIDE OPEN. ${n} NEW PATIENTS.` : 'THE DOORS SLIDE OPEN. A NEW PATIENT.')
-    + (bay ? ` NURSE BEV ROOMS SOMEONE INTO BAY ${bay}.` : '') + ` WAITING ROOM: ${g.waiting.length}.`;
+  const flowMsg = (n, bay) => {
+    const left = g.quota - g.doneNight;
+    return (n > 1 ? `THE DOORS SLIDE OPEN. ${n} NEW PATIENTS. ` : n ? 'THE DOORS SLIDE OPEN. A NEW PATIENT. ' : '')
+      + (bay ? `NURSE BEV ROOMS SOMEONE INTO BAY ${bay}. ` : '') + `${left} PATIENT${left > 1 ? 'S' : ''} LEFT TONIGHT.`;
+  };
 
   function fadeOut(cb) { fade = { t: 0, cb }; }
   function stepFade() {
@@ -173,6 +190,7 @@
     'EMERGENCY DEPARTMENT.\nNIGHT SHIFT.\nFOREVER.',
     'KEEP YOUR SANITY AND SELF-RESPECT ABOVE ZERO. THERE IS NO WINNING. THERE IS ONLY 3 AM.',
     '(PRESS START FOR THE MENU. NURSE BEV HAS TIPS. THE BREAK ROOM HAS COFFEE.)',
+    'NIGHT 1. ONE PATIENT TONIGHT. HOW BAD COULD IT BE?',
   ];
 
   // ---------- overworld ----------
@@ -195,7 +213,7 @@
       if (!g.psychDone && ((g.psychGroupAt >= 0 && g.psychSteps - g.psychGroupAt >= 6) || g.psychSteps >= 90)) scuffle();
       return;
     }
-    g.min += 0.5;
+    passTime(0.5);
     stepsSince++;
     // A bay that finishes being cleaned gets the next patient right away.
     let freed = false;
@@ -206,11 +224,8 @@
     }
     if (++g.bayTimer >= 40) {
       g.bayTimer = 0;
-      arrive(1);
-      SFX.play('page');
-      return say(flowMsg(1, roomNext()));
+      if (arrive(1)) { SFX.play('page'); return say(flowMsg(1, roomNext())); }
     }
-    if (g.min >= 720) return nightEnd();
     // Waiting room: someone seated there corners you. Hallway: a bay patient comes looking for you.
     const zone = WORLD.encounterZone(P.x, P.y);
     if (!zone || stepsSince <= 6 || Math.random() >= 1 / 14) return;
@@ -224,13 +239,17 @@
     encounter(g.bays[i], `THE PATIENT FROM BAY ${i + 1} HAS FOLLOWED YOU INTO THE HALL.`, { bay: i });
   }
 
+  // What the next night's patients are like, by absurdity level.
+  const MOODS = ['', '', 'THEY SEEM A LITTLE SILLIER.', 'THEY SEEM PETTIER.', 'THEY SEEM MUCH NEEDIER.', 'THEY SEEM COMPLETELY UNHINGED.'];
   function nightEnd() {
     SFX.play('clock');
-    say(['THE CLOCK STRIKES 7:00 AM.', 'YOUR RELIEF IS HERE! YOU CAN FINALLY GO HOME!', '...',
+    const n = g.night + 1, san = g.heal('san', 8), rsp = g.heal('rsp', 5);
+    say(['THAT WAS THE LAST PATIENT OF THE NIGHT. THE CLOCK STRIKES 7:00 AM.', 'YOUR RELIEF IS HERE! YOU CAN FINALLY GO HOME!', '...',
       "NO. THAT'S A COAT RACK SOMEONE PUT A LAB COAT ON.", 'THE CLOCK HANDS SPIN BACKWARD WITH A SICKENING CREAK.',
-      `IT IS 7:00 PM. NIGHT ${g.night + 1} BEGINS. THE PATIENTS SEEM... NEEDIER.`]);
-    g.night++;
-    g.min = 0;
+      `THE SUN WAS UP FOR ONE SECOND. +${san} SANITY, +${rsp} SELF-RESPECT.`,
+      `IT IS 7:00 PM. NIGHT ${n} BEGINS. ${n} PATIENTS TONIGHT. ${MOODS[CLINIC.level(n)]}`]);
+    g.night = n;
+    startNight();
   }
 
   function interact() {
@@ -353,7 +372,7 @@
     g.floor = 'er';
     Object.assign(P, { x: 27, y: 10, px: 27 * TS, py: 10 * TS, dir: 'up', moving: false });
     g.san = g.sanMax;
-    g.min += 60;
+    passTime(60);
     state = 'world';
     SFX.music(WORLD.MUSIC);
     say(['YOU WAKE UP ON THE BREAK ROOM COUCH.',
@@ -428,18 +447,21 @@
     if (from.bay >= 0) { g.bays[from.bay] = null; g.bayClean[from.bay] = 30; }
     if (from.wait) leaveWaiting(from.wait);
     if (r === 'win') {
-      g.seen++; g.coffeeReady = true; g.napReady = true; g.orFix = {}; g.morgueRest = false; g.vendIn = Math.max(0, g.vendIn - 1); g.min += 35;
-    } else g.min += 15;
-    // The doors never stop: every patient out means at least one more in, more as the nights go on.
-    const n = 1 + (Math.random() < 0.25 + 0.1 * g.night ? 1 : 0);
-    arrive(n);
-    const bay = roomNext();
+      g.seen++; g.coffeeReady = true; g.napReady = true; g.orFix = {}; g.morgueRest = false; g.vendIn = Math.max(0, g.vendIn - 1);
+    }
+    g.doneNight++;
+    g.min = Math.max(g.min, 715 * g.doneNight / g.quota); // each patient out moves the clock toward 7 AM
     stepsSince = 0;
+    if (g.doneNight >= g.quota) {
+      return fadeOut(() => { state = 'world'; SFX.music(WORLD.MUSIC); nightEnd(); });
+    }
+    // Someone new comes in behind each patient who leaves (two at a time from night 4), until tonight's count is reached.
+    const n = arrive(g.night >= 4 ? 2 : 1), bay = roomNext();
     fadeOut(() => {
       state = 'world';
       SFX.music(WORLD.MUSIC);
       SFX.play('page');
-      say(flowMsg(n, bay), () => { if (g.min >= 720) nightEnd(); });
+      say(flowMsg(n, bay));
     });
   }
 
@@ -491,7 +513,7 @@
       [
         ps ? 'MALPHAS, ROOM 3' : 'DR. MALPHAS, M.D.', ps ? 'BELIEVES: ER DOCTOR' : 'DEMON. NIGHT SHIFT.', '',
         `BURNOUT LV   ${g.lv}`, `BURNOUT PTS  ${g.xp}/${g.next}`, `SANITY       ${g.san}/${g.sanMax}`,
-        `SELF-RESPECT ${g.rsp}/${g.rspMax}`, `NIGHT        ${g.night}`, `PATIENTS     ${g.seen}`, `WAITING      ${g.waiting.length}`,
+        `SELF-RESPECT ${g.rsp}/${g.rspMax}`, `NIGHT        ${g.night} (${g.doneNight}/${g.quota})`, `PATIENTS     ${g.seen}`, `WAITING      ${g.waiting.length}`,
         `CLOCK        ${g.clockStr()}`, `SHIFT #${fmt(shiftNo)}`,
       ].forEach((r, i) => G.text(r, 10, 10 + i * 11, i === 1 || i === 10 ? 2 : 3));
       return;
@@ -682,6 +704,14 @@
     get g() { return g; }, get state() { return state; }, get P() { return P; }, get dlg() { return dlg; },
     encounter: (i) => { dlg = null; encounter(PATIENTS[i || 0], null, {}); },
     walkin: (tid) => { dlg = null; encounter(CLINIC.make(CLINIC.roll(tid)), null, {}); },
+    fightNext: () => { // battle the next real patient in the building (a bay first, then the waiting room)
+      dlg = null;
+      const i = g.bays.findIndex(Boolean);
+      if (i >= 0) return encounter(g.bays[i], null, { bay: i }), g.bays[i];
+      const p = g.waiting[0];
+      if (p) return encounter(p, null, { wait: p }), p;
+      return null;
+    },
     arrive, roomNext,
     press: (b) => { I.hit[b] = true; },
     hold: (b, on) => { I.down[b] = on; },
