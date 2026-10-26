@@ -130,6 +130,7 @@
     p.fill(3).rect(1, 1, 14, 15, 1).rect(7, 1, 2, 15, 3);
     p.line(2, 10, 5, 4, 0).line(10, 12, 13, 6, 0).line(3, 13, 6, 7, 0);
   });
+  t.doorOpen = T(null, (p) => { p.fill(0).rect(0, 0, 2, 16, 3).rect(14, 0, 2, 16, 3).dither(2, 9, 12, 7, 1, 0); }); // panels slid aside
   t.plant = T(t.carpet, (p) => {
     p.rect(4, 10, 8, 6, 3).rect(5, 11, 6, 4, 2);
     p.line(8, 10, 8, 3, 3).line(8, 5, 4, 8, 3).line(8, 6, 12, 9, 3).line(8, 3, 11, 1, 3);
@@ -226,6 +227,7 @@
       return isWall(W.tile(x, y + 1)) ? t.wallTop : t.wallFace;
     }
     if (ch === 'M') return (G.frame >> 4) % 2 ? t.monB : t.monA; // the alarms never stop
+    if (ch === 'D' && W.doorsOpen) return t.doorOpen; // end of shift: daylight through the front doors
     return t[CH[ch]] || t.dark;
   }
 

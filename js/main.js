@@ -67,6 +67,7 @@
       coffeeReady: true, napReady: true, vendIn: 0, bays: [null, null, null, null, null, null], bayTimer: 0,
       waiting: [], drawn: [], met: {}, // waiting room queue; cases seen this shift; visits per regular this shift
       quota: 1, spawned: 0, doneNight: 0, // night N brings N patients: how many, how many have arrived, how many are done
+      offShift: false, // tonight's patients are done and the front doors are open
       bayClean: [0, 0, 0, 0, 0, 0], // steps until a just-cleared bay can take a new patient
       floor: 'er', orFix: {}, pitched: 0, // which floor; OR patients you've rescued; night you last turned down Dr. Ether
       morgueRest: false, stares: 0, // lay on the morgue's empty table since the last patient; bodies stared at
@@ -200,6 +201,7 @@
     P.dir = d;
     const [dx, dy] = DIRS[d], nx = P.x + dx, ny = P.y + dy;
     if (blocked(nx, ny)) {
+      if (g.offShift && WORLD.tile(nx, ny) === 'D') return leave(); // walk out the open front doors
       if (I.pressed(d) || ++bumpT % 18 === 0) SFX.play('bump');
       return;
     }
@@ -213,6 +215,7 @@
       if (!g.psychDone && ((g.psychGroupAt >= 0 && g.psychSteps - g.psychGroupAt >= 6) || g.psychSteps >= 90)) scuffle();
       return;
     }
+    if (g.offShift) return; // 7:00 AM, building empty: the clock and the doors wait for you
     passTime(0.5);
     stepsSince++;
     // A bay that finishes being cleaned gets the next patient right away.
@@ -239,17 +242,78 @@
     encounter(g.bays[i], `THE PATIENT FROM BAY ${i + 1} HAS FOLLOWED YOU INTO THE HALL.`, { bay: i });
   }
 
+  // ---------- end of shift: you get to leave. Sort of. ----------
   // What the next night's patients are like, by absurdity level.
   const MOODS = ['', '', 'THEY SEEM A LITTLE SILLIER.', 'THEY SEEM PETTIER.', 'THEY SEEM MUCH NEEDIER.', 'THEY SEEM COMPLETELY UNHINGED.'];
-  function nightEnd() {
+  let out = null; // the walk through the parking lot
+  const OFF_SHIFT = {
+    'NURSE BEV': 'GO HOME, DOC. THE FRONT DOORS ARE OPEN. ...FOR NOW.',
+    'CERBERUS (SECURITY)': 'CERBERUS STEPS ASIDE FROM THE DOORS. ALL THREE HEADS WATCH YOU. ONE OF THEM IS SMILING.',
+    'MORT THE JANITOR': "HEADING OUT, DOC? SURE. SEE YOU IN A MINUTE.",
+  };
+
+  function shiftOver() {
+    g.offShift = true;
+    g.min = 720;
     SFX.play('clock');
-    const n = g.night + 1, san = g.heal('san', 8), rsp = g.heal('rsp', 5);
-    say(['THAT WAS THE LAST PATIENT OF THE NIGHT. THE CLOCK STRIKES 7:00 AM.', 'YOUR RELIEF IS HERE! YOU CAN FINALLY GO HOME!', '...',
-      "NO. THAT'S A COAT RACK SOMEONE PUT A LAB COAT ON.", 'THE CLOCK HANDS SPIN BACKWARD WITH A SICKENING CREAK.',
-      `THE SUN WAS UP FOR ONE SECOND. +${san} SANITY, +${rsp} SELF-RESPECT.`,
-      `IT IS 7:00 PM. NIGHT ${n} BEGINS. ${n} PATIENTS TONIGHT. ${MOODS[CLINIC.level(n)]}`]);
+    say(['THAT WAS THE LAST PATIENT OF THE NIGHT. THE CLOCK STRIKES 7:00 AM.',
+      'YOUR RELIEF HAS ARRIVED: A COAT RACK SOMEONE PUT A LAB COAT ON. IT WILL HAVE TO DO.',
+      'YOUR SHIFT IS OVER. YOU CAN GO HOME. THE FRONT DOORS ARE OPEN.']);
+  }
+  function leave() {
+    SFX.play('door');
+    fadeOut(() => {
+      state = 'outside';
+      out = { t: 0, y: 44, walking: false };
+      SFX.music(null);
+      SFX.play('birds');
+      const gains = [[g.heal('san', 8), 'SANITY'], [g.heal('rsp', 5), 'SELF-RESPECT']].filter(([n]) => n).map(([n, k]) => `+${n} ${k}`);
+      say(['THE DOORS SLIDE OPEN. SUNLIGHT. FRESH AIR. BIRDS.',
+        'THE SUN ON YOUR FACE FEELS INCREDIBLE.' + (gains.length ? ` ${gains.join(', ')}.` : ''),
+        'YOUR CAR IS RIGHT THERE. YOU WALK TOWARD IT. TOWARD HOME. TOWARD...'], () => { out.walking = true; });
+    });
+  }
+  function updOutside() {
+    out.t++;
+    if (dlg) return updDialog();
+    if (!out.walking) return;
+    out.y += 0.5;
+    if (out.y >= 84) comeBackIn();
+  }
+  // No fade: one step past the car, you're walking in through the front doors.
+  function comeBackIn() {
+    out = null;
+    const n = g.night + 1;
     g.night = n;
+    g.offShift = false;
     startNight();
+    WORLD.use('er');
+    g.floor = 'er';
+    Object.assign(P, { x: 5, y: 13, px: 5 * TS, py: 13 * TS, dir: 'up', moving: false });
+    stepsSince = 0;
+    state = 'world';
+    SFX.play('door');
+    SFX.music(WORLD.MUSIC);
+    say(['...THE FRONT DOORS OF PURGATORY GENERAL HOSPITAL. THEY SLIDE SHUT BEHIND YOU.',
+      "THE CLOCK SAYS 6:59 PM. THEN 7:00 PM. YOU'RE RIGHT ON TIME FOR YOUR SHIFT.",
+      `NURSE BEV (FROM THE DESK): "RIGHT ON TIME, DOC. NIGHT ${n}. ${n} PATIENTS TONIGHT." ${MOODS[CLINIC.level(n)]}`]);
+  }
+  function drawOutside() {
+    const t = out.t;
+    G.clear(0);
+    const sy = 30 - Math.min(18, t / 10); // the sun comes up behind the hospital
+    for (let dy = -8; dy <= 8; dy++) { const w = Math.round(Math.sqrt(64 - dy * dy) * 2); G.rect(124 - w / 2, sy + dy, w, 1, 1); }
+    G.rect(0, 22, 160, 28, 2);                                                  // the hospital
+    for (let x = 6; x < 156; x += 16) if (x < 62 || x > 92) G.rect(x, 27, 8, 6, 3);
+    G.rect(52, 22, 56, 9, 3);
+    G.textC('EMERGENCY', 80, 23, 0);
+    G.rect(66, 34, 28, 16, 3); G.rect(68, 36, 24, 14, 0);                       // the doors, open
+    G.rect(0, 50, 160, 94, 1);                                                  // the parking lot
+    for (let x = 6; x < 160; x += 22) { G.rect(x, 64, 2, 14, 0); G.rect(x, 100, 2, 14, 0); }
+    G.rect(104, 82, 26, 9, 3); G.rect(108, 78, 16, 5, 3); G.rect(110, 79, 12, 3, 0); // your car
+    G.rect(107, 91, 5, 3, 3); G.rect(122, 91, 5, 3, 3);
+    G.draw(SPR.docDown[out.walking ? (t >> 3) % 2 : 0], 72, Math.round(out.y), out.walking && (t >> 4) % 2 === 1);
+    if (dlg) TB.draw(dlg.tb);
   }
 
   function interact() {
@@ -258,6 +322,7 @@
     if (!npc && WORLD.isCounter(ch)) npc = WORLD.npcAt(fx + dx, fy + dy);
     if (npc && npc.pitch) return pitch(npc);
     if (npc && npc.group && g.psychGroupAt < 0) return groupTherapy();
+    if (npc && g.offShift && OFF_SHIFT[npc.name]) return say(`${npc.name}:\n${OFF_SHIFT[npc.name]}`);
     if (npc && npc.name === 'NURSE BEV' && g.psychDone && !g.bevPsych) {
       g.bevPsych = true;
       return say("NURSE BEV:\nTHE PSYCH WARD? DOC, THAT FLOOR'S BEEN CLOSED FOR CENTURIES. ...WHY DO YOU ASK?");
@@ -283,6 +348,7 @@
     if (bi >= 0 && g.bays[bi]) return encounter(g.bays[bi], `YOU PULL BACK THE CURTAIN ON BAY ${WORLD.BAYS[bi].n}.`, { bay: bi });
     const si = WORLD.seatAt(fx, fy), sitter = si >= 0 && g.waiting.find((w) => w.seat === si);
     if (sitter) return encounter(sitter, 'YOU MAKE EYE CONTACT WITH SOMEONE IN THE WAITING ROOM. ROOKIE MISTAKE.', { wait: sitter });
+    if (ch === 'D' && g.offShift) return leave();
     const lines = WORLD.interact(ch, g, fx, fy);
     if (!lines) return;
     if (/^\+/.test(lines[lines.length - 1])) SFX.play('heal');
@@ -453,7 +519,7 @@
     g.min = Math.max(g.min, 715 * g.doneNight / g.quota); // each patient out moves the clock toward 7 AM
     stepsSince = 0;
     if (g.doneNight >= g.quota) {
-      return fadeOut(() => { state = 'world'; SFX.music(WORLD.MUSIC); nightEnd(); });
+      return fadeOut(() => { state = 'world'; SFX.music(WORLD.MUSIC); shiftOver(); });
     }
     // Someone new comes in behind each patient who leaves (two at a time from night 4), until tonight's count is reached.
     const n = arrive(g.night >= 4 ? 2 : 1), bay = roomNext();
@@ -562,6 +628,7 @@
     const cx = Math.max(0, Math.min(WORLD.w * TS - 160, P.px - 72));
     const cy = Math.max(-9, Math.min(WORLD.h * TS - 144, P.py - 64));
     G.clear(3);
+    WORLD.doorsOpen = g.offShift;
     WORLD.draw(cx, cy);
     WORLD.drawBays(g.bays, cx, cy, g.bayClean);
     WORLD.drawWaiting(g.waiting, cx, cy);
@@ -650,6 +717,7 @@
     else if (state === 'battle') BATTLE.update(I);
     else if (state === 'gameover') updOver();
     else if (state === 'sleep') updSleep();
+    else if (state === 'outside') updOutside();
     I.hit = {};
   }
   function draw() {
@@ -658,6 +726,7 @@
     else if (state === 'battle') BATTLE.draw();
     else if (state === 'gameover') drawOver();
     else if (state === 'sleep') drawSleep();
+    else if (state === 'outside') drawOutside();
     G.post();
   }
 
