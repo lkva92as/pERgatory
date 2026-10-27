@@ -1,0 +1,146 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no">
+<title>pERgatory</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<style>
+  /* One fixed dark look: a handheld console on a night-shift backdrop. */
+  :root {
+    color-scheme: dark;
+    --bg: #17121c;
+    --muted: #9a92a6;
+    --muted-hi: #c9bfd6;
+    --label: #c8c2d0;
+    --led: #e3203f;
+    --led-glow: #ff3355;
+    --black: #000;
+    --shell: #cbc5b8;
+    --shell-dark: #a39c8f;
+    --bezel: #4b4754;
+    --btn: #8c1d3c;
+    --btn-dark: #5e1027;
+    --dpad: #26232b;
+    --ink: #2c2a6b;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; background: var(--bg); }
+  body {
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    font-family: "Courier New", monospace; color: var(--muted);
+    touch-action: none; user-select: none; -webkit-user-select: none;
+    overflow: hidden;
+    padding-block: 12px;
+    padding-left: max(16px, env(safe-area-inset-left, 0px));
+    padding-right: max(16px, env(safe-area-inset-right, 0px));
+  }
+  .shell {
+    background: var(--shell);
+    border-radius: 12px 12px 56px 12px;
+    padding: 18px 20px 22px;
+    box-shadow: inset -4px -6px 0 var(--shell-dark), 0 24px 70px var(--black);
+  }
+  .bezel {
+    background: var(--bezel);
+    border-radius: 8px 8px 32px 8px;
+    padding: 10px 24px 14px;
+  }
+  .bezel-top {
+    display: flex; align-items: center; gap: 6px;
+    color: var(--label); font-size: 9px; letter-spacing: 1px; margin-bottom: 8px;
+  }
+  .bezel-top .line { flex: 1; height: 2px; background: var(--btn); }
+  .led { width: 8px; height: 8px; border-radius: 50%; background: var(--led); box-shadow: 0 0 6px var(--led-glow); }
+  canvas {
+    display: block; margin: 0 auto;
+    image-rendering: pixelated; image-rendering: crisp-edges;
+    background: var(--black);
+  }
+  .brand {
+    margin: 10px 0 0 4px; color: var(--ink);
+    font: italic 900 18px/1 Georgia, serif; letter-spacing: 1px;
+  }
+  .brand small { font: 700 9px/1 "Courier New", monospace; letter-spacing: 2px; font-style: normal; }
+  .controls { display: flex; justify-content: space-between; align-items: center; margin-top: 14px; }
+  .dpad { position: relative; width: 90px; height: 90px; }
+  .dpad button {
+    position: absolute; width: 30px; height: 30px; padding: 0;
+    background: var(--dpad); border: 0; border-radius: 3px; cursor: pointer;
+    box-shadow: 0 3px 0 var(--black);
+  }
+  .dpad .u { left: 30px; top: 0; }
+  .dpad .d { left: 30px; top: 60px; }
+  .dpad .l { left: 0; top: 30px; }
+  .dpad .r { left: 60px; top: 30px; }
+  .dpad .c { left: 30px; top: 30px; box-shadow: none; pointer-events: none; }
+  .ab { display: flex; gap: 12px; transform: rotate(-25deg); margin-right: 4px; }
+  .ab div { display: flex; flex-direction: column; align-items: center; gap: 4px; }
+  .ab button {
+    width: 42px; height: 42px; border-radius: 50%; border: 0; cursor: pointer;
+    background: var(--btn); box-shadow: 0 3px 0 var(--btn-dark);
+  }
+  .ab span, .ss span { color: var(--ink); font-size: 10px; font-weight: 700; letter-spacing: 1px; }
+  .ss { display: flex; justify-content: center; gap: 22px; margin-top: 16px; }
+  .ss div { display: flex; flex-direction: column; align-items: center; gap: 4px; transform: rotate(-25deg); }
+  .ss button {
+    width: 44px; height: 11px; border-radius: 6px; border: 0; cursor: pointer;
+    background: var(--shell-dark); box-shadow: inset 0 -2px 0 var(--bezel);
+  }
+  button:active, button.on { transform: translateY(2px); box-shadow: none !important; filter: brightness(1.25); }
+  button:focus-visible { outline: 2px solid var(--ink); outline-offset: 2px; }
+  .help { margin-top: 14px; font-size: 11px; text-align: center; line-height: 1.6; }
+  .help b { color: var(--muted-hi); }
+  @media (max-width: 520px) {
+    .help { display: none; }
+    .shell { padding: 12px 12px 16px; border-radius: 10px 10px 40px 10px; }
+    .bezel { padding: 8px 10px 10px; border-radius: 6px 6px 24px 6px; }
+    .bezel-top { font-size: 7px; letter-spacing: 0; }
+    .controls { margin-top: 10px; }
+    .ss { margin-top: 10px; }
+  }
+</style>
+</head>
+<body>
+  <div class="shell">
+    <div class="bezel">
+      <div class="bezel-top"><span class="led"></span><span class="line"></span>
+        <span>DOT MATRIX WITH ETERNAL SUFFERING</span><span class="line"></span></div>
+      <canvas id="screen" width="160" height="144"></canvas>
+    </div>
+    <div class="brand">GAME SOUL <small>NIGHT SHIFT ED.</small></div>
+    <div class="controls">
+      <div class="dpad">
+        <button class="u" data-btn="up" aria-label="Up"></button>
+        <button class="l" data-btn="left" aria-label="Left"></button>
+        <button class="c" tabindex="-1" aria-hidden="true"></button>
+        <button class="r" data-btn="right" aria-label="Right"></button>
+        <button class="d" data-btn="down" aria-label="Down"></button>
+      </div>
+      <div class="ab">
+        <div><button data-btn="b" aria-label="B"></button><span>B</span></div>
+        <div><button data-btn="a" aria-label="A"></button><span>A</span></div>
+      </div>
+    </div>
+    <div class="ss">
+      <div><button data-btn="select" aria-label="Select"></button><span>SELECT</span></div>
+      <div><button data-btn="start" aria-label="Start"></button><span>START</span></div>
+    </div>
+  </div>
+  <div class="help">
+    <b>ARROWS/WASD</b> move · <b>Z/SPACE</b> A · <b>X/ESC</b> B · <b>ENTER</b> START · <b>SHIFT</b> SELECT (palette) · <b>M</b> mute
+  </div>
+
+  <script src="js/font.js"></script>
+  <script src="js/gfx.js"></script>
+  <script src="js/audio.js"></script>
+  <script src="js/sprites.js"></script>
+  <script src="js/world.js"></script>
+  <script src="js/patients.js"></script>
+  <script src="js/walkins.js"></script>
+  <script src="js/clinic.js"></script>
+  <script src="js/admins.js"></script>
+  <script src="js/battle.js"></script>
+  <script src="js/main.js"></script>
+</body>
+</html>
